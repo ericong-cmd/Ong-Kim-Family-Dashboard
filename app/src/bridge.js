@@ -1,8 +1,26 @@
-/* bridge.js — live SGX prices through the IBKR connector (window.cowork.callMcpTool).
+/* bridge.js — live SGX prices through the IBKR connector (window.cowork.callMcpTool in Cowork; the
+   mcp capability in a claude.ai artifact).
    The artifact sandbox blocks direct web requests; the connector is the live source. */
 const IBKR_PREFIX = 'mcp__11074d8e-bdc3-4cc0-a0b4-0174219e8270__';
-function hasBridge(){ return !!(typeof window !== 'undefined' && window.cowork && typeof window.cowork.callMcpTool === 'function'); }
+// claude.ai artifact: the same connector through the page's mcp capability (viewer's own credentials).
+const IBKR_SERVER = 'Interactive Brokers';
+let _mcp = null;
+async function bridgeReady(){
+  if (_mcp || typeof window === 'undefined' || !window.claude || typeof window.claude.use !== 'function') return !!_mcp;
+  try { _mcp = await window.claude.use('mcp'); } catch (e) { _mcp = null; }
+  return !!_mcp;
+}
+const MCP_HELP = { server_not_connected: 'Add Interactive Brokers in claude.ai Settings → Connectors',
+  needs_reauth: 'Reconnect Interactive Brokers in claude.ai Settings → Connectors',
+  selection_required: 'Choose which Interactive Brokers connector to use when Claude asks',
+  not_in_manifest: 'Interactive Brokers is turned off for this dashboard — allow it in the artifact’s connector settings',
+  blocked_by_policy: 'Your organization blocks this Interactive Brokers tool' };
+function hasBridge(){ return !!_mcp || !!(typeof window !== 'undefined' && window.cowork && typeof window.cowork.callMcpTool === 'function'); }
 async function ibkr(tool, args){
+  if (_mcp){
+    try { const res = await _mcp.callTool(IBKR_SERVER, tool, args); return res.payload == null ? {} : res.payload; }
+    catch (e) { const err = new Error(MCP_HELP[e.code] || e.message || 'IBKR connector error'); err.code = e.code; throw err; }
+  }
   const r = await window.cowork.callMcpTool(IBKR_PREFIX + tool, args);
   if (!r) throw new Error('No response from the IBKR connector');
   if (r.isError){ const msg = (r.content && r.content[0] && r.content[0].text) || 'IBKR connector error'; throw new Error(msg); }

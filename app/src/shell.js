@@ -174,7 +174,7 @@ function _hm(iso){ if (!iso) return ''; const d = new Date(iso); return isNaN(d)
 function onStoreSaved(savedAt, ok){
   const el = document.getElementById('sideStatus'); if (!el) return;
   if (STORE_SOURCE === 'memory'){ el.innerHTML = '<span class="warn">Not saving on this device — back up JSON</span>'; return; }
-  const where = STORE_BACKEND === 'file' ? 'Saved to data/state' : 'Saved on this device';
+  const where = STORE_BACKEND === 'file' ? 'Saved to data/state' : STORE_BACKEND === 'claude' ? 'Saved to your Claude account' : 'Saved on this device';
   el.innerHTML = ok === false ? '<span class="warn">Last save failed — back up JSON</span>' : (where + (savedAt ? ' · ' + esc(_hm(savedAt)) : ''));
 }
 function updateSidePrices(){
@@ -185,4 +185,66 @@ function updateSidePrices(){
   const last = ((DOC && DOC.stores.meta.lastPriceRefresh) || {}).value;
   const stale = oldest < m.lastTradingDay;
   el.innerHTML = `<span class="${stale ? 'warn' : ''}">Prices as at ${esc(oldest)}</span>` + (last ? `<br>IBKR refresh ${esc(_hm(new Date(last).toISOString()))}` : '') + (m.open ? '<br>SGX open' : '<br>SGX closed');
+}
+
+/* ---------- in-page confirmations ----------
+   A claude.ai artifact never shows confirm()/prompt() (they return false/null at once), so there the
+   question is asked in a dialog on the page. Elsewhere the native dialog is kept as it always was. */
+function _askDialog(message, okLabel, typed){
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ask-overlay';
+    wrap.innerHTML = '<div class="ask" role="dialog" aria-modal="true"><p class="ask-msg"></p>'
+      + (typed ? '<label class="fld">Type ' + esc(typed) + ' to confirm<input type="text" id="askTyped" autocomplete="off"></label>' : '')
+      + '<div class="ask-actions"><button type="button" class="ghost" id="askCancel">Cancel</button><button type="button" class="primary" id="askOk"></button></div></div>';
+    wrap.querySelector('.ask-msg').textContent = message;
+    const ok = wrap.querySelector('#askOk'); ok.textContent = okLabel || 'OK';
+    const input = wrap.querySelector('#askTyped');
+    if (input){ ok.disabled = true; input.addEventListener('input', () => { ok.disabled = input.value.trim() !== typed; }); }
+    const done = v => { document.removeEventListener('keydown', onKey); wrap.remove(); resolve(v); };
+    const onKey = e => { if (e.key === 'Escape') done(false); };
+    document.addEventListener('keydown', onKey);
+    wrap.querySelector('#askCancel').addEventListener('click', () => done(false));
+    ok.addEventListener('click', () => done(true));
+    document.body.appendChild(wrap);
+    (input || ok).focus();
+  });
+}
+function confirmDialog(message, okLabel){
+  if (STORE_BACKEND !== 'claude') return Promise.resolve(confirm(message));
+  return _askDialog(message, okLabel, null);
+}
+function typedConfirm(message, word){
+  if (STORE_BACKEND !== 'claude') return Promise.resolve(prompt(message + '\nType ' + word + ' to confirm.') === word);
+  return _askDialog(message, word === 'DELETE' ? 'Erase everything' : 'Confirm', word);
+}
+
+/* ---------- claude.ai artifact: file saves and first run ---------- */
+async function saveViaClaude(content, name){
+  const dl = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('downloads') : null;
+  if (!dl){ toast('Saving files isn’t available in this view'); return; }
+  try { await dl.save({ filename: name, data: content instanceof Blob || typeof content === 'string' ? content : new Blob([content]) }); }
+  catch (e) { if (e && e.code !== 'declined') toast('Couldn’t save ' + name + ' (' + (e.code || e.message) + ')'); }
+}
+function showFirstRun(){
+  const host = document.querySelector('main') || document.body;
+  if (document.getElementById('firstRun')) return;
+  const box = document.createElement('section');
+  box.id = 'firstRun'; box.className = 'first-run';
+  box.innerHTML = '<h2>Load your data</h2><p>This dashboard starts empty. Your records are kept privately in your Claude account — no one you share the link with can see them.</p>'
+    + '<p>Choose your latest <b>portfolio-ledger_backup_…json</b> (from <i>Export &amp; data → Backup JSON</i> in Cowork, or <code>node app/tools/state.js export</code> on your Mac).</p>'
+    + '<div class="ask-actions"><label class="btn-like primary">Choose backup file<input type="file" id="firstRunFile" accept=".json" hidden></label>'
+    + '<button type="button" class="ghost" id="firstRunDismiss">Start empty</button></div>';
+  host.prepend(box);
+  box.querySelector('#firstRunFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    await restoreJson(f);
+    if (Object.keys(DOC.stores.transactions).length){ applyInSpecieFix(); box.remove(); }
+  });
+  box.querySelector('#firstRunDismiss').addEventListener('click', () => box.remove());
+}
+function applyClaudeMode(){
+  if (STORE_BACKEND !== 'claude') return;
+  ['pdfBtn', 'resetBtn'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; });   // no print dialog; no bundled data to reset to
+  document.querySelectorAll('.hint').forEach(h => { if (/saved on this device automatically/.test(h.textContent)) h.textContent = 'Everything is saved to your Claude account automatically. Exports respect the current owner filter.'; });
 }

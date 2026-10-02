@@ -556,7 +556,7 @@ async function submitTx(ev){
     (t.ticker||'')===(rec.ticker||'') &&
     Math.abs(num(t.quantity)-rec.quantity)<1e-9 && Math.abs(num(t.price)-rec.price)<1e-9 &&
     Math.abs(num(t.dividend)-rec.dividend)<1e-9);
-  if(dup && !confirm('An identical entry already exists ('+dup.date+' '+dup.type+' '+(dup.ticker||'')+'). Add it anyway?')) return;
+  if(dup && !(await confirmDialog('An identical entry already exists ('+dup.date+' '+dup.type+' '+(dup.ticker||'')+'). Add it anyway?','Add anyway'))) return;
   await sAdd('transactions',rec);
   await loadAll(); renderAll(); markDirty();
   document.getElementById('txForm').reset();
@@ -725,7 +725,7 @@ function exportCsv(silent){
   downloadBlob(lines.join('\n'),`portfolio-holdings_${scopeTag()}_${state.basis}${state.fy}_${todayISO()}.csv`,'text/csv');
   if(!silent) toast('Holdings CSV exported');
 }
-function downloadBlob(content,name,type){ const b=new Blob([content],{type:type||'application/octet-stream'}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
+function downloadBlob(content,name,type){ if(STORE_BACKEND==='claude') return saveViaClaude(content,name); const b=new Blob([content],{type:type||'application/octet-stream'}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
 
 /* ---------- export: one-page PDF of the current holdings view ----------
    Renders a self-contained A4-landscape document in a hidden iframe and opens the print dialog
@@ -864,7 +864,7 @@ async function restoreJson(file){
     (Array.isArray(data.prices)&&data.prices.length || Array.isArray(data.histPrices)&&data.histPrices.length);
   if(priceOnly){
     const n=(data.prices||[]).length, h=(data.histPrices||[]).length;
-    if(!confirm(`Update prices only?\n\n${n} current price(s)${h?` and ${h} historical price(s)`:''} will be merged.\nTransactions and boundaries are left untouched.`)) return;
+    if(!(await confirmDialog(`Update prices only?\n\n${n} current price(s)${h?` and ${h} historical price(s)`:''} will be merged.\nTransactions and boundaries are left untouched.`,'Update prices'))) return;
     for(const p of (data.prices||[])) await sPut('prices',{ticker:p.ticker,price:p.price==null?null:Number(p.price),asOf:p.asOf||todayISO(),source:p.source||'import'});
     for(const x of (data.histPrices||[])) await sPut('histprices',Object.assign({key:x.date+'|'+x.ticker},x));
     await loadAll(); renderAll(); markDirty();
@@ -872,7 +872,7 @@ async function restoreJson(file){
     return;
   }
   if(!Array.isArray(data.transactions)){ toast('JSON has no transactions and no prices — nothing to load'); return; }
-  if(!confirm('Restore will REPLACE the current ledger with the file contents. Continue?')) return;
+  if(!(await confirmDialog('Restore will REPLACE the current ledger with the file contents. Continue?','Restore'))) return;
   await Promise.all([sClear('transactions'),sClear('prices'),sClear('boundaries'),sClear('histprices')]);
   const tx=data.transactions.map(t=>{ const c=Object.assign({},t); delete c.id; return c; });
   await sBulkAdd('transactions',tx);
@@ -893,7 +893,7 @@ async function restoreJson(file){
   toast('Ledger restored ('+tx.length+' transactions'+(extras?', '+extras+' tab records':'')+')');
 }
 async function resetToBundled(){
-  if(prompt('Discard everything saved on this device and return to the data bundled with this dashboard?\nType RESET to confirm.')!=='RESET'){ toast('Not reset'); return; }
+  if(!(await typedConfirm('Discard everything saved on this device and return to the data bundled with this dashboard?','RESET'))){ toast('Not reset'); return; }
   storeReset();
   await loadAll(); renderAll(); if(typeof renderCurrentPage==='function') renderCurrentPage(); markClean();
   toast('Back to the bundled data');
@@ -916,7 +916,7 @@ async function loadDemo(){
   toast('Demo loaded — FY2025 dollar return should read +S$675.00');
 }
 async function clearAll(){
-  if(prompt('This erases ALL data on this device — ledger, prices, rules, statements, properties and policies — and cannot be undone.\nType DELETE to confirm.')!=='DELETE'){ toast('Not cleared'); return; }
+  if(!(await typedConfirm('This erases ALL data on this device — ledger, prices, rules, statements, properties and policies — and cannot be undone.','DELETE'))){ toast('Not cleared'); return; }
   await Promise.all([sClear('transactions'),sClear('prices'),sClear('boundaries'),sClear('histprices')].concat(EXTRA_STORES.map(s=>sClear(s))));
   await loadAll(); renderAll(); if(typeof renderCurrentPage==='function') renderCurrentPage(); markClean(); toast('All data cleared');
 }

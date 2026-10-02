@@ -7,6 +7,9 @@
                outside the page (Claude Code, tools/state.js) are never silently overwritten — the page
                reloads instead.
    • browser — localStorage (the Cowork artifact keeps it across reloads and app restarts).
+   • claude  — when built as a claude.ai artifact (npm run build:claude): the page carries no data;
+               each store is saved in the artifact's database under the viewer's private
+               data/users/<id>/ subtree, split into ≤180 KB documents (the platform caps one at 256 KiB).
 
    The embedded seed (newest data/backups file) is used only when nothing has been saved yet. */
 const STORE_KEY = 'okfo:v1';
@@ -55,6 +58,7 @@ function _persist(){
   DOC.savedAt = new Date().toISOString();
   if (STORE_SOURCE === 'memory') return;
   if (STORE_BACKEND === 'file'){ _queueServerSave(); return; }
+  if (STORE_BACKEND === 'claude'){ _queueClaudeSave(); return; }
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DOC)); STORE_OK = true; }
   catch (e) {
     STORE_OK = false; console.error('save failed', e);
@@ -99,6 +103,82 @@ function _watchServerRev(){
     } catch (e) {}
   }, 5000);
 }
+/* ---------- claude.ai artifact backend (db capability) ---------- */
+const CLAUDE_CHUNK = 180000;
+let _claude = null;   // { db, uid, dirty:Set, chunks:{store:n}, timer, inflight, pending }
+function _claudeMode(){ return typeof document !== 'undefined' && !!document.getElementById('claude-backend'); }
+function _claudeRef(name){ return _claude.db.collection('data/users/' + _claude.uid).doc(name); }
+function _markDirty(store){ if (_claude) _claude.dirty.add(store); }
+// Split a store's records into documents under the size cap (records are never split).
+function _chunkStore(items){
+  const parts = []; let cur = {}, size = 2;
+  Object.entries(items || {}).forEach(([k, v]) => {
+    const n = JSON.stringify(k).length + JSON.stringify(v).length + 2;
+    if (size + n > CLAUDE_CHUNK && Object.keys(cur).length){ parts.push(cur); cur = {}; size = 2; }
+    cur[k] = v; size += n;
+  });
+  parts.push(cur);
+  return parts;
+}
+async function _claudeConnect(){
+  const nothing = () => { _seedDoc(); STORE_SOURCE = 'memory'; return STORE_SOURCE; };
+  if (!window.claude || typeof window.claude.use !== 'function') return nothing();
+  const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+  const uid = user && await user.id();
+  if (!db || !uid) return nothing();
+  _claude = { db, uid, dirty: new Set(), chunks: {}, timer: null, inflight: false, pending: false };
+  const idx = await _claudeRef('okfo-index').get();
+  DOC = _blankDoc();
+  if (!idx.exists){ STORE_SOURCE = 'empty'; return STORE_SOURCE; }
+  const meta = idx.data();
+  DOC.seq = Object.assign({}, meta.seq || {}); DOC.savedAt = meta.savedAt || null;
+  for (const [store, n] of Object.entries(meta.chunks || {})){
+    if (!KEYPATH[store]) continue;
+    _claude.chunks[store] = n;
+    for (let i = 0; i < n; i++){
+      const snap = await _claudeRef('okfo-' + store + '-' + i).get();
+      if (snap.exists) Object.assign(DOC.stores[store], _clone(snap.data().items || {}));
+    }
+  }
+  _normaliseDoc(DOC);
+  STORE_SOURCE = 'saved';
+  return STORE_SOURCE;
+}
+function _queueClaudeSave(){
+  if (!_claude) return;
+  _claude.pending = true;
+  clearTimeout(_claude.timer);
+  _claude.timer = setTimeout(_flushClaudeSave, 600);
+}
+async function _flushClaudeSave(){
+  if (!_claude.pending || _claude.inflight) return;
+  _claude.pending = false; _claude.inflight = true;
+  const stores = [..._claude.dirty]; _claude.dirty.clear();
+  try {
+    for (const store of stores){
+      const parts = _chunkStore(DOC.stores[store]);
+      for (let i = 0; i < parts.length; i++) await _claudeRef('okfo-' + store + '-' + i).set({ items: parts[i] });
+      for (let i = parts.length; i < (_claude.chunks[store] || 0); i++) await _claudeRef('okfo-' + store + '-' + i).delete();
+      _claude.chunks[store] = parts.length;
+    }
+    await _claudeRef('okfo-index').set({ version: 1, savedAt: DOC.savedAt, seq: DOC.seq, chunks: _claude.chunks });
+    STORE_OK = true;
+  } catch (e) {
+    stores.forEach(s => _claude.dirty.add(s)); _claude.pending = true; STORE_OK = false;
+    console.error('save to the artifact database failed', e);
+    if (typeof toast === 'function') toast('Couldn’t save (' + (e.code || e.message) + '). Back up JSON before closing.');
+  } finally {
+    _claude.inflight = false; _notifySaved();
+    if (_claude.pending) _claude.timer = setTimeout(_flushClaudeSave, STORE_OK ? 600 : 5000);
+  }
+}
+// Every backend is ready once this resolves; only the claude backend has anything to wait for.
+async function storeReady(){
+  if (STORE_BACKEND !== 'claude') return STORE_SOURCE;
+  try { return await _claudeConnect(); }
+  catch (e) { console.error('artifact database unavailable', e); _seedDoc(); STORE_SOURCE = 'memory'; return STORE_SOURCE; }
+}
+
 function _nextId(store){
   const cur = Object.keys(DOC.stores[store]).reduce((m, k) => Math.max(m, Number(k) || 0), 0);
   DOC.seq[store] = Math.max(DOC.seq[store] || 0, cur) + 1;
@@ -109,15 +189,15 @@ function _put(store, val){
   const v = _clone(val);
   if (AUTO[store] && (v[kp] == null || v[kp] === '')) v[kp] = _nextId(store);
   if (v[kp] == null || v[kp] === '') throw new Error(store + ' record is missing ' + kp);
-  DOC.stores[store][v[kp]] = v;
+  DOC.stores[store][v[kp]] = v; _markDirty(store);
   return v[kp];
 }
 function sAll(store){ return Promise.resolve(Object.values(DOC.stores[store] || {}).map(_clone)); }
 function sGet(store, key){ const v = (DOC.stores[store] || {})[key]; return Promise.resolve(v == null ? null : _clone(v)); }
 function sPut(store, val){ const k = _put(store, val); _persist(); return Promise.resolve(k); }
 function sAdd(store, val){ const v = _clone(val); if (AUTO[store]) delete v[KEYPATH[store]]; return sPut(store, v); }
-function sDel(store, key){ delete DOC.stores[store][key]; _persist(); return Promise.resolve(); }
-function sClear(store){ DOC.stores[store] = {}; _persist(); return Promise.resolve(); }
+function sDel(store, key){ delete DOC.stores[store][key]; _markDirty(store); _persist(); return Promise.resolve(); }
+function sClear(store){ DOC.stores[store] = {}; _markDirty(store); _persist(); return Promise.resolve(); }
 function sBulkAdd(store, items){
   (items || []).forEach(it => { const v = _clone(it); if (AUTO[store]) delete v[KEYPATH[store]]; _put(store, v); });
   _persist(); return Promise.resolve();
@@ -137,6 +217,7 @@ function _serverState(){
   try { return JSON.parse(el.textContent); } catch (e) { return null; }
 }
 function storeInit(){
+  if (_claudeMode()){ STORE_BACKEND = 'claude'; DOC = _blankDoc(); STORE_SOURCE = 'loading'; return STORE_SOURCE; }   // storeReady() loads
   const ss = _serverState();
   if (ss){                                    // served by app/server.js → data lives in data/state/
     STORE_BACKEND = 'file'; _server = { rev: ss.rev || 0, pending: false, timer: null, inflight: false };

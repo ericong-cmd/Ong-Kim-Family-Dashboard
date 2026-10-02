@@ -10,6 +10,7 @@ function setRefreshing(on, done, total){
   const s = document.getElementById('sidePrices'); if (s && on) s.textContent = 'Refreshing prices…';
 }
 async function autoRefreshPrices(force){
+  await bridgeReady();
   if (!hasBridge()){ updateSidePrices(); return { skipped: 'no connector' }; }
   const tickers = pricedTickers();
   const meta = await sGet('meta', 'lastPriceRefresh');
@@ -31,6 +32,7 @@ async function autoRefreshPrices(force){
 // Drop the flag so the dividend alone carries the income. Runs once; later edits are left alone.
 function applyInSpecieFix(){
   if ((DOC.stores.meta['fix:inspecie-v1'] || {}).value) return 0;
+  if (!Object.keys(DOC.stores.transactions).length) return 0;   // nothing loaded yet (empty artifact) — check again after a restore
   const hits = doubleCountedInSpecie(Object.values(DOC.stores.transactions));
   hits.forEach(h => {
     const t = Object.assign({}, DOC.stores.transactions[h.openingId]);
@@ -76,19 +78,21 @@ function applyRegistryFill(){
   return res;
 }
 async function boot(){
-  const src = storeInit();
+  let src = storeInit();
+  src = await storeReady();
   const fixed = applyInSpecieFix();
   const filled = applyRegistryFill();
   const fromFolder = importInbox();
   Object.values(DOC.stores.maps || {}).forEach(m => { if (String(m.key).startsWith('cid:')) IBKR_CONTRACTS[m.key.slice(4)] = m.value; });
   await loadAll();
-  populateOwner(); wire(); shellInit(); renderAll();
+  populateOwner(); wire(); shellInit(); applyClaudeMode(); renderAll();
   const last = (DOC.stores.meta.lastPage || {}).value;
   showPage(['rules', 'ledger', 'cash', 'property', 'insurance'].includes(last) ? last : 'ledger');
   if (fromFolder) toast(fromFolder + ' new bank statement line' + (fromFolder === 1 ? '' : 's') + ' loaded from Statements/Bank');
   if (filled && (filled.policies || filled.properties || filled.updated)) toast('Family registers filled from the Insurance and Property folders: ' + filled.policies + ' policies and ' + filled.properties + ' properties added, ' + filled.updated + ' completed');
   if (fixed) toast('Corrected ' + fixed + ' in-specie distribution counted twice (Keppel REIT units, 8 May 2026)');
-  if (src === 'memory') toast('This view can’t save on the device — back up JSON before closing.');
+  if (src === 'memory') toast(STORE_BACKEND === 'claude' ? 'Sign in to Claude to save — changes in this view are not kept. Back up JSON before closing.' : 'This view can’t save on the device — back up JSON before closing.');
+  if (src === 'empty' && STORE_BACKEND === 'claude') showFirstRun();
   window.__refreshDone = autoRefreshPrices(false).catch(e => { console.warn('price refresh failed', e); toast('Price refresh failed: ' + e.message); });
 }
 window.__refreshDone = Promise.resolve();

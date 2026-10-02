@@ -69,11 +69,15 @@ function checkGlobals(){
 }
 
 // serverState: { rev, doc|null } when served by app/server.js; omitted for the Cowork artifact.
+// claude: true → the claude.ai artifact — no data at all in the page (no seed, no statements); the
+// viewer loads a backup once and it is kept in the artifact's private per-user database.
 function assemble(opts){
   opts = opts || {};
   const root = opts.root || ROOT;
   checkGlobals();
-  const seed = buildSeed(root), inbox = buildInbox(root);
+  const seed = opts.claude ? { format: 'portfolio-ledger', version: 3, transactions: [], prices: [], boundaries: [], histPrices: [], seedSource: null }
+    : buildSeed(root);
+  const inbox = opts.claude ? { builtAt: new Date().toISOString(), files: [] } : buildInbox(root);
   const modules = ORDER.map(n => {
     const code = fs.readFileSync(path.join(SRC, n + '.js'), 'utf8');
     if (/<\/script/i.test(code)) throw new Error(n + '.js contains a literal </script> — split the string');
@@ -82,13 +86,23 @@ function assemble(opts){
   let html = fs.readFileSync(path.join(SRC, 'index.html'), 'utf8');
   for (const slot of ['/*{{CSS}}*/', '{{SEED}}', '{{INBOX}}', '<!--{{SCRIPTS}}-->', '<!--{{SERVER_STATE}}-->'])
     if (!html.includes(slot)) throw new Error('index.html is missing ' + slot);
-  const serverTag = opts.serverState ? '<script type="application/json" id="server-state">' + jsonForHtml(opts.serverState) + '</script>' : '';
+  const serverTag = opts.serverState ? '<script type="application/json" id="server-state">' + jsonForHtml(opts.serverState) + '</script>'
+    : opts.claude ? '<script type="application/json" id="claude-backend">{}</script>' : '';
   html = html.replace('/*{{CSS}}*/', () => fs.readFileSync(path.join(SRC, 'styles.css'), 'utf8'))
     .replace('<!--{{SERVER_STATE}}-->', () => serverTag)
     .replace('{{SEED}}', () => jsonForHtml(seed))
     .replace('{{INBOX}}', () => jsonForHtml(inbox))
     .replace('<!--{{SCRIPTS}}-->', () => modules);
+  if (opts.claude) html = artifactFragment(html);
   return { html, seed, inbox };
+}
+
+// claude.ai wraps a published page in its own <!doctype>/<html>/<head>/<body>: hand it the head's
+// title, scripts and styles followed by the body's content (charset and viewport come from the wrapper).
+function artifactFragment(html){
+  const head = (html.match(/<head>([\s\S]*?)<\/head>/i) || [, ''])[1].replace(/<meta [^>]*>\s*/gi, '');
+  const body = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || [, html])[1];
+  return head.trim() + '\n' + body.trim() + '\n';
 }
 
 module.exports = { assemble, buildSeed, buildInbox, newest, ROOT, APP, SRC, ORDER, REGISTRY_VERSION };

@@ -19,17 +19,18 @@ npm run state -- summary
 Prerequisites on the Mac: Node ≥ 20, Python 3; for reading scanned bank PDFs also
 `brew install tesseract poppler`.
 
-## Two ways the page runs (one source)
+## Three ways the page runs (one source)
 
-| | Local / Claude Code (`npm start`) | Cowork artifact (`npm run build`) |
-|---|---|---|
-| Page | served by `app/server.js` on 127.0.0.1 | `app/dist/family-office.html`, published with Cowork `update_artifact` id `ong-kim-family-office` |
-| Data | **`data/state/okfo-state.json`** (+ daily snapshots in `data/state/history/`) | the artifact's browser storage (`localStorage` key `okfo:v1`) |
-| Live prices | Claude Code → **refresh-prices** skill → `state.js set-prices` | IBKR connector called from the page on open |
-| Bank PDFs | "Process new PDFs now" → server runs `tools/bank_pdf_to_csv.py` | Cowork task `ok-bank-statement-pdfs` (on demand) |
+| | Local / Claude Code (`npm start`) | Cowork artifact (`npm run build`) | claude.ai artifact (`npm run build:claude`) |
+|---|---|---|---|
+| Page | served by `app/server.js` on 127.0.0.1 | `app/dist/family-office.html`, published with Cowork `update_artifact` id `ong-kim-family-office` | `app/dist/family-office.claude.html`, published as https://claude.ai/artifact/S6wGFkmMxbtnpcsJii3qXS (opens in the Claude desktop app) |
+| Data | **`data/state/okfo-state.json`** (+ daily snapshots in `data/state/history/`) | the artifact's browser storage (`localStorage` key `okfo:v1`) | the artifact's database, private to each signed-in viewer (`data/users/<id>/okfo-*`); the page itself carries **no data** — first open asks for a Backup JSON |
+| Live prices | Claude Code → **refresh-prices** skill → `state.js set-prices` | IBKR connector called from the page on open | Interactive Brokers connector through the page's `mcp` capability, on open |
+| Bank PDFs | "Process new PDFs now" → server runs `tools/bank_pdf_to_csv.py` | Cowork task `ok-bank-statement-pdfs` (on demand) | not available — upload CSV/XLSX statements, or process PDFs on the Mac and Backup/Restore |
 
-`store.js` picks the backend: if the page contains `<script id="server-state">` (only the server adds
-it) it uses the file; otherwise localStorage. First open with no saved data seeds from the newest
+`store.js` picks the backend: `<script id="claude-backend">` (only `build:claude` adds it) → the
+claude.ai database; `<script id="server-state">` (only the server adds it) → the file; otherwise
+localStorage. First open with no saved data seeds from the newest
 `data/backups/portfolio-ledger_backup_*.json`.
 
 **Moving data between the two:** in either dashboard, *Export & data → Backup JSON* downloads a full
@@ -76,14 +77,14 @@ node app/tools/state.js export                  # → data/backups/portfolio-led
 ```
 app/
   server.js           local server (Claude Code); createServer() exported for tests
-  build.js            → dist/family-office.html (Cowork artifact)
+  build.js            → dist/family-office.html (Cowork artifact); --claude → dist/family-office.claude.html (claude.ai artifact)
   lib/assemble.js     builds the page: src modules + seed (newest backup + newest price file + registry) + Statements/Bank inbox
   lib/statefile.js    read/write data/state/okfo-state.json (atomic, rev, daily snapshots)
   src/index.html, styles.css
   src/engine.js       positions, FIFO, periods, XIRR, Modified Dietz — the maths of record
   src/calc.js         pure helpers: SGX ticks, Fibonacci, bank CSV/XLSX parsing, dividend matching, yields, premium dates, market hours, XLSX writer
   src/store.js        storage backends + backup ⇄ document conversion
-  src/bridge.js       IBKR connector (Cowork only)
+  src/bridge.js       IBKR connector (Cowork: window.cowork; claude.ai artifact: mcp capability)
   src/ledger.js       Portfolio Ledger page, exports, backup/restore
   src/shell.js        navigation, drawer, forms, KPI cards, inline delete confirmation
   src/rules.js  cash.js  property.js  insurance.js     one module per tab
@@ -126,6 +127,10 @@ build refuses duplicate top-level names. Don't put a literal `</script>` in sour
 - Fibonacci levels: Buy 1-3 at 38.2/50/61.8% retracements, cut loss 78.6%, Sell 1 prior high, Sell 2-3
   at 127.2/161.8% extensions. A charting convention — say so; not advice.
 - Deletes in the page use the inline "Delete? [Delete] [Cancel]" confirmation (Cowork blocks pop-ups).
+  Other confirmations go through `confirmDialog` / `typedConfirm` (shell.js): native dialogs locally and
+  in Cowork, an in-page dialog in the claude.ai artifact (it never shows `confirm()`/`prompt()`).
+- **The claude.ai artifact never embeds data.** To update it: `npm run build:claude`, `npm test`, then
+  publish `app/dist/family-office.claude.html` to the same URL with the Artifact tool.
 
 ## Open items carried over from Cowork (2 Oct 2026)
 
@@ -141,6 +146,7 @@ build refuses duplicate top-level names. Don't put a literal `</script>` in sour
 
 ## Tests
 
-`npm test` runs every suite. The smoke test boots the built page in jsdom (Cowork mode) and the server
-test boots it against a live server on a temp data dir (local mode). Write the failing test first, then
-the code; keep both modes green.
+`npm test` runs every suite. The smoke test boots the built page in jsdom (Cowork mode), the server
+test boots it against a live server on a temp data dir (local mode), and the claude test boots the
+claude.ai build against a fake platform (db, user, mcp, downloads) with synthetic data. Write the failing test first, then
+the code; keep all three modes green.
