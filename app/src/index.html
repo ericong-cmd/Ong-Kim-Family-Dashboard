@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ong &amp; Kim Family Office</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root{color-scheme:light}
+/*{{CSS}}*/
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+  <div class="brand"><span class="brand-mark">OK</span><span class="brand-txt"><b>Ong &amp; Kim</b><small>Family Office</small></span></div>
+  <nav class="nav" aria-label="Sections">
+    <button type="button" class="nav-item" data-page="rules"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 15l4-4 3 3 5-6"/></svg><span>Rules</span></button>
+    <button type="button" class="nav-item" data-page="ledger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Portfolio Ledger</span></button>
+    <button type="button" class="nav-item" data-page="cash"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span>Cash on Hand</span></button>
+    <button type="button" class="nav-item" data-page="property"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-5h4v5"/></svg><span>Property</span></button>
+    <button type="button" class="nav-item" data-page="insurance"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span>Insurance</span></button>
+  </nav>
+  <div class="side-foot">
+    <div id="sideStatus">Loading…</div>
+    <div id="sidePrices"></div>
+  </div>
+</aside>
+
+<main class="main">
+<div id="miniBar"><span id="mbScope"></span><span id="mbPrices" class="mb-ok"></span><span id="mbDirty"></span></div>
+
+<!-- ============================== RULES ============================== -->
+<section class="page" id="page-rules">
+  <header class="page-head">
+    <div><h1>Rules</h1><div class="sub">Buy, cut-loss and take-profit levels per stock · Fibonacci retracements on SGX ticks</div></div>
+    <div class="controls"><button type="button" class="primary" id="newRuleBtn">+ New rule</button></div>
+  </header>
+  <div class="kpis" id="rulesKpis"></div>
+  <section class="card">
+    <div class="card-head"><h2>Rules summary</h2><span class="hint">Status compares each rule with the latest stored price</span></div>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Stock</th><th class="num">Last</th><th class="num">Buy 1</th><th class="num">Buy 2</th><th class="num">Buy 3</th><th class="num">Cut loss</th><th class="num">Sell 1</th><th class="num">Sell 2</th><th class="num">Sell 3</th><th>Status</th><th></th></tr></thead>
+      <tbody id="rulesBody"></tbody>
+    </table></div>
+    <div class="hint" style="margin-top:10px">Fibonacci levels are a charting convention, not a forecast or investment advice.</div>
+  </section>
+</section>
+
+<!-- ============================== PORTFOLIO LEDGER ============================== -->
+<section class="page" id="page-ledger">
+  <header class="page-head">
+    <div>
+      <h1>Portfolio Ledger</h1>
+      <div class="sub"><span id="hlScope">Return</span> · FIFO cost · SGD · FY 1 Apr – 31 Mar</div>
+    </div>
+    <div class="controls">
+      <label class="fld">Owner <select id="ownerFilter"></select></label>
+      <label class="fld">Year basis
+        <select id="basisFilter">
+          <option value="FY">Financial year · Apr–Mar</option>
+          <option value="CY">Calendar year · Jan–Dec</option>
+        </select>
+      </label>
+      <label class="fld"><span id="periodLbl">Financial year</span> <select id="fyFilter"></select></label>
+      <button type="button" id="refreshPricesBtn" class="ghost">Refresh prices</button>
+    </div>
+  </header>
+
+  <!-- primary KPIs: what we have · how it's doing · how liquid -->
+  <div class="kpis kpis-3">
+    <div class="kpi kpi-primary"><div class="kpi-l" id="kpiMVlbl">Portfolio value</div><div class="kpi-v" id="kpiMV">—</div><div class="kpi-s" id="kpiMVsub"></div></div>
+    <div class="kpi kpi-primary kpi-return">
+      <div class="kpi-l">Period return</div>
+      <div class="kpi-return-row"><div class="big" id="hlXirr">n/a</div><div class="dollar" id="hlDollar">—</div></div>
+      <div class="kpi-s" id="hlHint">money-weighted, annualised</div>
+    </div>
+    <div class="kpi kpi-primary"><div class="kpi-l">Cash on hand</div><div class="kpi-v" id="kpiCash">—</div><div class="kpi-s" id="kpiCashSub"></div></div>
+  </div>
+  <div class="kpis kpis-3 kpis-secondary">
+    <div class="kpi"><div class="kpi-l">Unrealised P/L</div><div class="kpi-v" id="kpiUnreal">—</div><div class="kpi-s" id="kpiUnrealSub"></div></div>
+    <div class="kpi"><div class="kpi-l" id="kpiRealLbl">Realised P/L</div><div class="kpi-v" id="kpiReal">—</div><div class="kpi-s" id="kpiRealSub"></div></div>
+    <div class="kpi"><div class="kpi-l" id="kpiDivLbl">Dividends</div><div class="kpi-v" id="kpiDiv">—</div><div class="kpi-s" id="kpiDivSub"></div></div>
+  </div>
+
+  <div class="ystrip" id="yearStrip"></div>
+
+  <div class="grid2 grid-even">
+    <section class="card">
+      <div class="card-head"><h2>Allocation by weight</h2></div>
+      <div id="allocBody"></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Return bridge</h2><span class="hint" id="hlFy"></span></div>
+      <div id="fyComponents" class="bridge"></div>
+      <div class="note-live" id="staleNote"></div>
+      <div class="note-live" id="liveNote"></div>
+      <details class="help"><summary>Reconciliation</summary><div class="recon" id="reconLine">Add transactions to begin.</div></details>
+    </section>
+  </div>
+
+  <section class="card">
+    <details id="periodSettings">
+      <summary class="card-head as-summary"><h2>Period settings — opening basis &amp; boundary values</h2></summary>
+      <div class="boundaries">
+        <label class="fld"><span>Opening basis</span>
+          <select id="openBasisSel"><option value="MARKET">Market value</option><option value="COST">Cost basis</option></select>
+        </label>
+        <label class="fld" id="openValFld"><span id="openLbl">Opening value · 1 Apr</span>
+          <input type="number" step="0.01" class="num-in" id="openingVal" placeholder="0.00">
+        </label>
+        <label class="fld"><span id="closeLbl">Closing value · 31 Mar</span>
+          <input type="number" step="0.01" class="num-in" id="closingVal" placeholder="live">
+        </label>
+        <button type="button" id="useLiveBtn" class="ghost" title="Fill closing from current prices">Use live market value</button>
+      </div>
+      <div class="hint"><b>Market value</b> — the portfolio's worth at the close of the day before the period starts (31 Mar for 1 Apr, 31 Dec for 1 Jan); gives a true period return, annualised as XIRR for completed years. <b>Cost basis</b> — what the holdings cost, worked out from the ledger; shows gain accumulated since purchase, not a period return. Closing left blank values the portfolio at current prices. Settings are stored per period &amp; owner.</div>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Holdings</h2><span class="hint" id="holdingsCap"></span></div>
+    <div class="scroll">
+      <table id="holdingsTable">
+        <colgroup>
+          <col style="width:14%"><col style="width:9.5%">
+          <col style="width:8.5%"><col style="width:9.5%"><col style="width:8%">
+          <col style="width:8%"><col style="width:9.5%"><col style="width:6%">
+          <col style="width:10.5%"><col style="width:9%"><col style="width:7.5%">
+        </colgroup>
+        <thead><tr>
+          <th data-sort="name">Equity</th><th data-sort="owner">Owner</th>
+          <th class="num" data-sort="qty">Qty</th><th class="num" data-sort="cost">Cost</th><th class="num" data-sort="avg">Avg&nbsp;/sh</th>
+          <th class="num" data-sort="price">Price</th><th class="num" data-sort="mv">Mkt&nbsp;value</th><th class="num" data-sort="wt">Wt&nbsp;%</th>
+          <th class="num" data-sort="unreal">Unreal.&nbsp;P/L</th><th class="num" data-sort="real">Realised<br><span style="font-weight:400;opacity:.6">period</span></th><th class="num" data-sort="div">Divs<br><span style="font-weight:400;opacity:.6">period</span></th>
+        </tr></thead>
+        <tbody id="holdingsBody"></tbody>
+        <tfoot id="holdingsFoot"></tfoot>
+      </table>
+    </div>
+    <div class="hint" id="oversoldHint" style="margin-top:10px;display:none"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <div class="card-head"><h2>Add transaction</h2></div>
+      <form id="txForm">
+        <div class="formgrid">
+          <label class="fld">Type
+            <select id="f_type">
+              <option value="BUY">BUY</option>
+              <option value="SELL">SELL</option>
+              <option value="DIVIDEND">DIVIDEND</option>
+              <option value="OPENING">OPENING (pre-existing holding)</option>
+              <option value="CORPORATE_ACTION">CORPORATE ACTION (split / bonus)</option>
+            </select>
+          </label>
+          <label class="fld">Owner <select id="f_owner"></select></label>
+          <label class="fld">Date <input type="date" id="f_date"></label>
+          <label class="fld">Equity name <input type="text" id="f_equity" placeholder="e.g. DBS Group"></label>
+          <label class="fld">Ticker
+            <input type="text" id="f_ticker" placeholder="e.g. D05" class="mono" list="tickerList" autocomplete="off">
+            <datalist id="tickerList"></datalist>
+          </label>
+          <label class="fld grp-qty">Quantity <input type="number" step="any" id="f_qty" class="num-in"></label>
+          <label class="fld grp-qty" id="lbl_price">Price / share <input type="number" step="any" id="f_price" class="num-in"></label>
+          <label class="fld grp-qty">Fees <input type="number" step="any" id="f_fees" class="num-in" placeholder="0.00"></label>
+          <label class="fld grp-div">Dividend amount (total) <input type="number" step="any" id="f_div" class="num-in"></label>
+          <label class="fld grp-ca">Ratio — new : old
+            <span class="rowflex"><input type="number" step="any" id="f_caNew" class="num-in" style="min-width:70px" placeholder="2"> :
+            <input type="number" step="any" id="f_caOld" class="num-in" style="min-width:70px" placeholder="1"></span>
+          </label>
+          <label class="fld" style="grid-column:1/-1">Note / source statement <input type="text" id="f_note" placeholder="e.g. CGS statement Aug-2026, line 14"></label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary" id="txSubmit">Add to ledger</button>
+          <button type="button" id="cancelEditBtn" style="display:none">Cancel edit</button>
+          <span class="hint" id="txHint"></span>
+        </div>
+      </form>
+      <details class="help"><summary>Field guide</summary><div>
+        BUY / SELL / OPENING use quantity &amp; price. Buy fees are capitalised into cost; opening balances carry your cost basis in “price / share”. DIVIDEND takes a total amount, not qty × price. CORPORATE ACTION rescales remaining lots (2 : 1 split → “2 : 1”; 1-for-10 bonus → “11 : 10”).
+      </div></details>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Recent transactions</h2></div>
+      <div class="rowflex" style="margin-bottom:8px"><input type="text" id="recentFilter" placeholder="Filter by ticker, name or type…" style="min-width:220px;flex:1"></div>
+      <div class="scroll scroll-y"><table>
+        <thead><tr><th>Date</th><th>Type</th><th>Owner</th><th>Equity</th><th class="num">Detail</th><th></th></tr></thead>
+        <tbody id="recentBody"></tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section class="card">
+      <div class="card-head"><h2>Current prices</h2></div>
+      <div class="hint" style="margin-bottom:10px">Prices refresh from Interactive Brokers automatically when the dashboard opens (when stale). You can also key a price in below.</div>
+      <div id="priceList"></div>
+      <details class="help" id="soldWrap"><summary>Sold-out positions — set a reference price</summary>
+        <div class="hint" style="margin:6px 0">These have zero quantity, so a price here never moves any total — it only fills the “Price” column for the record.</div>
+        <div id="soldPriceList"></div>
+      </details>
+      <div class="actions">
+        <button type="button" id="recomputeBtn" class="ghost">Refresh market values</button>
+        <button type="button" id="ibkrBtn" class="ghost">Pull live prices (IBKR)</button>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Export &amp; data</h2></div>
+      <div class="hint" style="margin-bottom:10px">Everything is saved on this device automatically. Exports respect the current owner filter.</div>
+      <div class="actions">
+        <button type="button" id="xlsxBtn" class="primary">Export .xlsx</button>
+        <button type="button" id="csvBtn" class="ghost">Export holdings CSV</button>
+        <button type="button" id="pdfBtn" class="ghost" title="One-page PDF of the holdings for the selected period">Export holdings PDF (1 page)</button>
+      </div>
+      <div class="actions">
+        <button type="button" id="jsonBtn" class="ghost">Backup JSON (whole ledger)</button>
+        <label class="btn-like">Restore JSON<input type="file" id="restoreInput" accept=".json" hidden></label>
+      </div>
+      <details class="danger"><summary>Danger zone</summary>
+        <div class="actions">
+          <button type="button" id="demoBtn" class="ghost">Load demo data (adds demo rows)</button>
+          <button type="button" id="resetBtn" class="ghost">Reset to bundled data…</button>
+          <button type="button" id="clearBtn" class="danger">Clear all data…</button>
+        </div>
+        <div class="hint">Reset asks you to type <b>RESET</b>; Clear asks for <b>DELETE</b>. Back up first.</div>
+      </details>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-head"><h2>Import trading statements (CSV / XLSX)</h2></div>
+    <div id="dropZone" class="drop">
+      <strong>Drop a CSV or XLSX file here</strong>, or <label class="link">browse<input type="file" id="fileInput" accept=".csv,.xlsx,.tsv" hidden></label>
+      <div class="hint" style="margin-top:6px">Trading statements build FIFO lots &amp; realised gains. Bank statements belong in <a href="#" data-goto="cash">Cash on Hand</a>, which captures dividends into this ledger.</div>
+    </div>
+    <div id="mapArea"></div>
+  </section>
+</section>
+
+<!-- ============================== CASH ON HAND ============================== -->
+<section class="page" id="page-cash">
+  <header class="page-head">
+    <div><h1>Cash on Hand</h1><div class="sub">Bank statements · balances per account · dividend capture into the ledger</div></div>
+    <div class="controls"><label class="primary btn-like">Upload statement<input type="file" id="cashFile" accept=".csv,.xlsx,.pdf" hidden></label></div>
+  </header>
+  <div class="kpis" id="cashKpis"></div>
+  <section class="card">
+    <div id="cashDrop" class="drop">
+      <strong>Drop a bank statement here</strong> — CSV (DBS iBanking detected automatically), XLSX or PDF
+      <div class="hint" style="margin-top:6px">Overlapping statements are de-duplicated line by line. PDFs are scanned images, so they go through Claude.</div>
+    </div>
+    <div id="pdfHandoff" class="handoff" hidden></div>
+    <div id="cashImportMsg" class="hint"></div>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Statements in the Statements/Bank folder</h2>
+      <button type="button" class="ghost" id="pdfProcessBtn">Process new PDFs now</button></div>
+    <div class="hint" style="margin-bottom:8px">Save bank statements (PDF or CSV) into <b>Statements/Bank</b> in the Ong Kim Investment folder. then press <i>Process new PDFs now</i>. PDFs are read in the background — each line is checked against the running balance and the statement totals — and the lines load here when the dashboard next opens. CSV and XLSX statements can also be uploaded directly above.</div>
+    <div id="stmtFiles"></div>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Dividends found in statements</h2>
+      <button type="button" class="primary" id="divCommitBtn" disabled>Add selected to ledger</button></div>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th></th><th>Date</th><th>Payer</th><th>Ticker</th><th class="num">Amount</th><th>Owner</th><th>Status</th></tr></thead>
+      <tbody id="divReviewBody"></tbody>
+    </table></div>
+    <div class="hint" style="margin-top:8px">Matched against ledger dividends on ticker, amount (±S$0.01) and date (±7 days). Payouts to the shareholder are not dividend income and are never listed here.</div>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Statement lines</h2>
+      <label class="fld fld-inline">Category <select id="cashCatFilter">
+        <option value="">All</option><option value="dividend">Dividend</option><option value="settlement">Share settlement</option>
+        <option value="payout">Payout to shareholder</option><option value="fee">Fees</option><option value="interest">Interest</option>
+        <option value="transfer">Transfer</option><option value="other">Other</option></select></label></div>
+    <div class="scroll scroll-y"><table class="tbl">
+      <thead><tr><th>Date</th><th>Account</th><th>Description</th><th>Category</th><th class="num">Withdrawal</th><th class="num">Deposit</th><th class="num">Balance</th></tr></thead>
+      <tbody id="cashLinesBody"></tbody>
+    </table></div>
+  </section>
+</section>
+
+<!-- ============================== PROPERTY ============================== -->
+<section class="page" id="page-property">
+  <header class="page-head">
+    <div><h1>Property</h1><div class="sub">Properties owned · loans · tenancy · yield</div></div>
+    <div class="controls"><button type="button" class="primary" id="newPropBtn">+ New property</button></div>
+  </header>
+  <div class="kpis" id="propKpis"></div>
+  <div id="propGrid" class="prop-grid"></div>
+  <div class="hint" style="margin-top:8px">Gross yield = rent × 12 ÷ purchase price. Net yield deducts MCST and property tax; loan interest is excluded (financing, not property performance).</div>
+</section>
+
+<!-- ============================== INSURANCE ============================== -->
+<section class="page" id="page-insurance">
+  <header class="page-head">
+    <div><h1>Insurance</h1><div class="sub">Policies per family member · premiums · who pays</div></div>
+    <div class="controls">
+      <button type="button" class="ghost" id="newPersonBtn">+ Family member</button>
+      <button type="button" class="primary" id="newPolicyBtn">+ New policy</button>
+    </div>
+  </header>
+  <div class="kpis" id="insKpis"></div>
+  <div id="insPeople" class="people-grid"></div>
+  <section class="card">
+    <div class="card-head"><h2>Premiums due in the next 60 days</h2></div>
+    <div id="insUpcoming"></div>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>All policies</h2></div>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Insured</th><th>Type</th><th>Insurer</th><th>Policy no.</th><th class="num">Sum assured</th><th class="num">Annual premium</th><th>Freq.</th><th>Next due</th><th>Paid by</th><th>Agent</th><th>Status</th><th></th></tr></thead>
+      <tbody id="insBody"></tbody>
+    </table></div>
+    <div class="hint" style="margin-top:8px">Premiums paid by the company are expensed under the family mandate (FS playbook). Policy types follow MoneySense's life / health / general insurance groupings.</div>
+  </section>
+</section>
+</main>
+</div>
+
+<!-- drawer for create / edit forms -->
+<div id="drawerWrap" hidden>
+  <div class="drawer-back" id="drawerBack"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <header class="drawer-head"><h2 id="drawerTitle"></h2><button type="button" class="icon-btn" id="drawerX" aria-label="Close">×</button></header>
+    <div class="drawer-body" id="drawerBody"></div>
+    <footer class="drawer-foot">
+      <button type="button" class="danger" id="drawerDelete" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="ghost" id="drawerCancel">Cancel</button>
+      <button type="button" class="primary" id="drawerSave">Save</button>
+    </footer>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+
+<!--{{SERVER_STATE}}-->
+<script type="application/json" id="seed">{{SEED}}</script>
+<script type="application/json" id="inbox">{{INBOX}}</script>
+<!--{{SCRIPTS}}-->
+</body>
+</html>

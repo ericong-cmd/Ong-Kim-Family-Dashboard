@@ -1,0 +1,219 @@
+
+<div id="miniBar"><span id="mbScope"></span><span id="mbPrices" class="mb-ok"></span><span id="mbDirty"></span></div>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Portfolio Ledger</h1>
+      <div class="sub">FIFO cost basis · money-weighted (XIRR) return · SGD · financial year 1 Apr – 31 Mar · Singapore (no capital-gains or dividend tax applied)</div>
+    </div>
+    <div class="controls">
+      <label class="fld">Owner
+        <select id="ownerFilter"></select>
+      </label>
+      <label class="fld">Year basis
+        <select id="basisFilter">
+          <option value="FY">Financial year · Apr–Mar</option>
+          <option value="CY">Calendar year · Jan–Dec</option>
+        </select>
+      </label>
+      <label class="fld"><span id="periodLbl">Financial year</span>
+        <select id="fyFilter"></select>
+      </label>
+    </div>
+  </header>
+
+  <!-- Year-by-year performance strip -->
+  <div class="ystrip" id="yearStrip"></div>
+
+  <!-- Headline + FY panel -->
+  <div class="grid2">
+    <section class="panel" id="headlinePanel">
+      <div class="headline">
+        <div class="cap" id="hlScope">Return</div>
+        <div class="big" id="hlXirr">n/a</div>
+        <div>
+          <div class="dollar" id="hlDollar">—</div>
+          <div class="hint" id="hlHint">money-weighted, annualised</div>
+        </div>
+      </div>
+      <div class="fymeta" id="hlFy"></div>
+      <div class="note-live" id="staleNote"></div>
+      <div class="recon" id="reconLine">Add transactions to begin.</div>
+      <div class="note-live" id="liveNote"></div>
+    </section>
+
+    <section class="panel" id="fyPanel">
+      <h2>Financial-year boundaries &amp; components</h2>
+      <div class="boundaries">
+        <label class="fld"><span>Opening basis</span>
+          <select id="openBasisSel">
+            <option value="MARKET">Market value</option>
+            <option value="COST">Cost basis</option>
+          </select>
+        </label>
+        <label class="fld" id="openValFld"><span id="openLbl">Opening value · 1 Apr</span>
+          <input type="number" step="0.01" class="num-in" id="openingVal" placeholder="0.00">
+        </label>
+        <label class="fld"><span id="closeLbl">Closing value · 31 Mar</span>
+          <input type="number" step="0.01" class="num-in" id="closingVal" placeholder="live">
+        </label>
+        <button id="useLiveBtn" class="ghost" title="Fill closing from current prices">Use live market value</button>
+      </div>
+      <div class="comp" id="fyComponents"></div>
+      <div class="hint" style="margin-top:10px"><b>Opening basis.</b> <b>Market value</b> — what the portfolio was worth at the close of the last day of the previous month (31 Mar for a 1 Apr start, 31 Dec for 1 Jan). You supply it from a broker valuation; it gives a true return for the period, annualised as XIRR. <b>Cost basis</b> — what the holdings cost when bought, worked out from the ledger with no input needed; it shows gain accumulated <i>since purchase</i>, so it is not a period return and is not annualised. Closing left blank values the portfolio at current prices. Boundary settings are stored per period &amp; owner. Opening balances (OPENING records) inside the year count as capital already in place, not a cash flow.</div>
+    </section>
+  </div>
+
+  <!-- Summary + Holdings -->
+  <section class="panel">
+    <h2>Holdings <span class="cap" id="holdingsCap" style="font-weight:400;font-size:.72em"></span></h2>
+    <div class="summary" id="summary"></div>
+    <div class="scroll">
+      <table id="holdingsTable">
+        <colgroup>
+          <col style="width:14%"><col style="width:9.5%">
+          <col style="width:8.5%"><col style="width:9.5%"><col style="width:8%">
+          <col style="width:8%"><col style="width:9.5%"><col style="width:6%">
+          <col style="width:10.5%"><col style="width:9%"><col style="width:7.5%">
+        </colgroup>
+        <thead><tr>
+          <th data-sort="name">Equity</th><th data-sort="owner">Owner</th>
+          <th class="num" data-sort="qty">Qty</th><th class="num" data-sort="cost">Cost</th><th class="num" data-sort="avg">Avg&nbsp;/sh</th>
+          <th class="num" data-sort="price">Price</th><th class="num" data-sort="mv">Mkt&nbsp;value</th><th class="num" data-sort="wt">Wt&nbsp;%</th>
+          <th class="num" data-sort="unreal">Unreal.&nbsp;P/L</th><th class="num" data-sort="real">Realised<br><span style="font-weight:400;opacity:.6">period</span></th><th class="num" data-sort="div">Divs<br><span style="font-weight:400;opacity:.6">period</span></th>
+        </tr></thead>
+        <tbody id="holdingsBody"></tbody>
+        <tfoot id="holdingsFoot"></tfoot>
+      </table>
+    </div>
+    <div class="hint" id="oversoldHint" style="margin-top:10px;display:none"></div>
+  </section>
+
+  <div class="grid2">
+    <!-- Add transaction -->
+    <section class="panel">
+      <h2>Add transaction</h2>
+      <form id="txForm">
+        <div class="formgrid">
+          <label class="fld">Type
+            <select id="f_type">
+              <option value="BUY">BUY</option>
+              <option value="SELL">SELL</option>
+              <option value="DIVIDEND">DIVIDEND</option>
+              <option value="OPENING">OPENING (pre-existing holding)</option>
+              <option value="CORPORATE_ACTION">CORPORATE ACTION (split / bonus)</option>
+            </select>
+          </label>
+          <label class="fld">Owner
+            <select id="f_owner"></select>
+          </label>
+          <label class="fld">Date
+            <input type="date" id="f_date">
+          </label>
+          <label class="fld">Equity name
+            <input type="text" id="f_equity" placeholder="e.g. DBS Group">
+          </label>
+          <label class="fld">Ticker
+            <input type="text" id="f_ticker" placeholder="e.g. D05" class="mono" list="tickerList" autocomplete="off">
+            <datalist id="tickerList"></datalist>
+          </label>
+          <label class="fld grp-qty">Quantity
+            <input type="number" step="any" id="f_qty" class="num-in">
+          </label>
+          <label class="fld grp-qty" id="lbl_price">Price / share
+            <input type="number" step="any" id="f_price" class="num-in">
+          </label>
+          <label class="fld grp-qty">Fees
+            <input type="number" step="any" id="f_fees" class="num-in" placeholder="0.00">
+          </label>
+          <label class="fld grp-div">Dividend amount (total)
+            <input type="number" step="any" id="f_div" class="num-in">
+          </label>
+          <label class="fld grp-ca">Ratio — new : old
+            <span class="rowflex"><input type="number" step="any" id="f_caNew" class="num-in" style="min-width:70px" placeholder="2"> :
+            <input type="number" step="any" id="f_caOld" class="num-in" style="min-width:70px" placeholder="1"></span>
+          </label>
+          <label class="fld" style="grid-column:1/-1">Note / source statement
+            <input type="text" id="f_note" placeholder="e.g. IBKR statement Aug-2024, line 14">
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary" id="txSubmit">Add to ledger</button>
+          <button type="button" id="cancelEditBtn" style="display:none">Cancel edit</button>
+          <span class="hint" id="txHint"></span>
+        </div>
+      </form>
+      <details class="help"><summary>Field guide</summary><div>
+        BUY / SELL / OPENING use quantity &amp; price. Buy fees are capitalised into cost; opening balances carry your cost basis in “price / share”. DIVIDEND takes a total amount, not qty × price. CORPORATE ACTION rescales remaining lots (2 : 1 split → “2 : 1”; 1-for-10 bonus → “11 : 10”).
+      </div></details>
+    </section>
+
+    <!-- Recent: beside the form so a new entry is visible the moment it lands -->
+    <section class="panel">
+      <h2>Recent transactions</h2>
+      <div class="rowflex" style="margin-bottom:8px"><input type="text" id="recentFilter" placeholder="Filter by ticker, name or type…" style="min-width:220px;flex:1"></div>
+      <div class="scroll"><table>
+        <thead><tr><th>Date</th><th>Type</th><th>Owner</th><th>Equity</th><th class="num">Detail</th><th></th></tr></thead>
+        <tbody id="recentBody"></tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <!-- Prices -->
+    <section class="panel">
+      <h2>Current prices</h2>
+      <div class="hint" style="margin-bottom:10px">Prices can be keyed in below, or pulled from Interactive Brokers on demand — IBKR can quote a ticker whether or not it is custodied there.</div>
+      <div id="priceList"></div>
+      <details class="help" id="soldWrap"><summary>Sold-out positions — set a reference price</summary>
+        <div class="hint" style="margin:6px 0">These have zero quantity, so a price here never moves any total — it only fills the “Price” column for the record.</div>
+        <div id="soldPriceList"></div>
+      </details>
+      <div class="actions">
+        <button id="recomputeBtn" class="ghost">Refresh market values</button>
+        <button id="ibkrBtn" class="ghost">Pull live prices (IBKR)</button>
+      </div>
+      <details class="help"><summary>How “Pull live prices” works</summary><div>
+        A browser file can't reach IBKR directly, so the button bridges through the Claude connector. In a standalone file it builds a request naming every held ticker (with its IBKR contract id), copies it to your clipboard, and shows it — paste it to Claude, who pulls the quotes and returns an updated price block to <b>Restore JSON</b>. Opened as a Cowork live view instead, it calls the connector directly and writes the prices straight in. Either way it's refresh-on-demand, not a ticking feed; real-time vs ~15-min delayed depends on your IBKR market-data subscription, and outside SGX hours the latest daily close is used.
+      </div></details>
+    </section>
+
+    <!-- Data -->
+    <section class="panel">
+      <h2>Export &amp; backup</h2>
+      <div class="hint" style="margin-bottom:10px">Exports respect the current owner filter. Filenames record scope &amp; date.</div>
+      <div class="actions">
+        <button id="xlsxBtn" class="primary">Export .xlsx</button>
+        <button id="csvBtn" class="ghost">Export holdings CSV</button>
+        <button id="pdfBtn" class="ghost" title="One-page PDF of the holdings exactly as shown for the selected period">Export holdings PDF (1 page)</button>
+      </div>
+      <div class="actions">
+        <button id="jsonBtn" class="ghost">Backup JSON (whole ledger)</button>
+        <label class="ghost" style="border:1px solid var(--rule);border-radius:7px;padding:8px 13px;cursor:pointer">Restore JSON<input type="file" id="restoreInput" accept=".json" hidden></label>
+      </div>
+      <div class="hint" style="margin-top:8px">JSON restore is also the import path for PDF statements once you’ve parsed them outside the dashboard.</div>
+      <details class="danger"><summary>Danger zone</summary>
+        <div class="actions">
+          <button id="demoBtn" class="ghost">Load demo data (replaces nothing, adds demo rows)</button>
+          <button id="clearBtn" class="danger">Clear all data…</button>
+        </div>
+        <div class="hint">Clear asks you to type <b>DELETE</b> before erasing. Back up first.</div>
+      </details>
+    </section>
+  </div>
+
+  <!-- Import -->
+  <section class="panel">
+    <h2>Import statements (CSV / XLSX)</h2>
+    <div id="dropZone">
+      <strong>Drop a CSV or XLSX file here</strong>, or <label style="color:var(--accent);cursor:pointer;text-decoration:underline">browse<input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.tsv" hidden></label>
+      <div class="hint" style="margin-top:6px">Trading statements build FIFO lots &amp; realised gains. Bank statements corroborate and supply dividends — unmatched lines are flagged for your review before anything commits. PDFs can’t be parsed in-browser: convert them outside, then use JSON restore below.</div>
+    </div>
+    <div id="mapArea"></div>
+  </section>
+
+  <footer class="hint" style="text-align:center;margin-top:10px">Portfolio Ledger · all logic runs in your browser · data stored locally in IndexedDB on this device.</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- ===================== ENGINE (verbatim, unit-tested) ===================== -->

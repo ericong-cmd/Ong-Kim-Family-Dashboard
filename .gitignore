@@ -1,0 +1,11 @@
+node_modules/
+
+# Family data stays out of git; keep it on the Mac and upload when needed
+data/
+Statements/
+app/dist/
+app/src/seed.extra.json
+
+__pycache__/
+*.pyc
+.DS_Store

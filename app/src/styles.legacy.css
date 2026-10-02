@@ -1,0 +1,134 @@
+
+  :root{
+    --paper:#f6f7f6; --panel:#ffffff; --ink:#191d1a; --muted:#5e6a63;
+    --rule:#e0e5e1; --rule-soft:#eef1ee; --green:#0b7a45; --red:#b3261e;
+    --accent:#2f6f6a; --chip:#eef2f0; --warn:#8a5a00; --warn-bg:#fdf6e6;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ui-serif,serif;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;text-align:right;white-space:nowrap}
+  .mono{font-family:var(--mono);letter-spacing:.01em}
+  .pos{color:var(--green)} .neg{color:var(--red)} .muted{color:var(--muted)}
+  a{color:var(--accent)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 80px}
+  header.top{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;justify-content:space-between;border-bottom:1px solid var(--rule);padding-bottom:16px;margin-bottom:22px}
+  header.top h1{font-family:var(--serif);font-weight:600;font-size:26px;letter-spacing:.01em;margin:0}
+  header.top .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .controls{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+  label.fld{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  select,input,button,textarea{font-family:inherit;font-size:14px;color:var(--ink)}
+  select,input[type=text],input[type=number],input[type=date],textarea{
+    background:var(--panel);border:1px solid var(--rule);border-radius:7px;padding:8px 10px;min-width:120px}
+  input.num-in{text-align:right;font-variant-numeric:tabular-nums}
+  textarea{min-height:38px;resize:vertical}
+  button{cursor:pointer;background:var(--panel);border:1px solid var(--rule);border-radius:7px;padding:8px 13px;transition:border-color .15s,background .15s}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button.primary:hover{background:#000}
+  button.ghost{background:transparent}
+  button.danger{color:var(--red);border-color:transparent;padding:4px 8px}
+  button.danger:hover{border-color:var(--red)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .panel{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:20px 22px;margin-bottom:22px}
+  .panel h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 14px}
+  .grid2{display:grid;grid-template-columns:1.15fr .85fr;gap:22px}
+  @media(max-width:840px){.grid2{grid-template-columns:1fr}}
+  /* Headline */
+  .headline{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 26px}
+  .headline .big{font-family:var(--serif);font-size:52px;line-height:1;font-weight:600;font-variant-numeric:tabular-nums}
+  .headline .dollar{font-size:22px;font-variant-numeric:tabular-nums}
+  .headline .cap{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);width:100%;margin-bottom:2px}
+  .fymeta{color:var(--muted);font-size:13px;margin-top:8px}
+  /* components */
+  .comp{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 22px;margin-top:6px}
+  .comp .row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--rule-soft);padding:5px 0}
+  .comp .row .k{color:var(--muted)}
+  .comp .row .v{font-variant-numeric:tabular-nums}
+  .recon{margin-top:14px;padding:12px 14px;background:var(--chip);border-radius:8px;font-size:13.5px;font-variant-numeric:tabular-nums;line-height:1.6}
+  .boundaries{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px}
+  .note-live{font-size:12px;color:var(--warn);background:var(--warn-bg);border-radius:6px;padding:6px 9px;margin-top:8px;display:none}
+  /* tables */
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+  thead th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;border-bottom:1px solid var(--rule);white-space:nowrap;position:sticky;top:0;background:var(--panel)}
+  th.num,td.num{text-align:right}
+  tbody tr:hover{background:#fafbfa}
+  tfoot td{border-top:2px solid var(--rule);border-bottom:none;font-weight:600;font-variant-numeric:tabular-nums}
+  .tick{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;background:var(--chip);color:var(--muted);margin-left:6px}
+  .badge.warn{background:var(--warn-bg);color:var(--warn)}
+  /* Holdings: compact so all 10 columns fit the panel width without horizontal scrolling. */
+  #holdingsTable{font-size:12px;table-layout:fixed}
+  #holdingsTable th,#holdingsTable td{padding:6px 6px}
+  #holdingsTable th.num,#holdingsTable td.num{white-space:nowrap;font-variant-numeric:tabular-nums}
+  #holdingsTable thead th{letter-spacing:.01em}
+  #holdingsTable td:first-child,#holdingsTable th:first-child{white-space:normal;word-break:break-word;line-height:1.25}
+  #holdingsTable td:nth-child(2),#holdingsTable th:nth-child(2){white-space:normal;word-break:break-word;line-height:1.2}
+  #holdingsTable .tick{font-size:11px;margin-left:2px}
+  #holdingsTable .badge{font-size:10px;padding:0 5px;margin-left:3px}
+  #holdingsTable td.num,#holdingsTable tfoot td{font-size:11.5px}
+  #holdingsTable .upct{display:block;font-size:10px;margin-top:1px}
+  .summary{display:flex;flex-wrap:wrap;gap:10px 30px;margin-bottom:20px}
+  .summary .cell{display:flex;flex-direction:column}
+  .summary .cell .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .summary .cell .v{font-size:19px;font-variant-numeric:tabular-nums}
+  /* forms */
+  .formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center}
+  .hint{color:var(--muted);font-size:12.5px}
+  .empty{color:var(--muted);text-align:center;padding:26px;font-size:14px}
+  /* dropzone */
+  #dropZone{border:1.5px dashed var(--rule);border-radius:10px;padding:26px;text-align:center;color:var(--muted);transition:border-color .15s,background .15s}
+  #dropZone.drag{border-color:var(--accent);background:#f2f7f6}
+  .map-row{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;margin-bottom:8px}
+  .pill{display:inline-block;background:var(--chip);border-radius:20px;padding:2px 10px;font-size:12px;margin:2px}
+  .status-ok{color:var(--green)} .status-no{color:var(--warn)}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;font-size:13.5px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:90vw}
+  .toast.show{opacity:1}
+  .inline-price{width:96px}
+  details.help{margin-top:10px}
+  details.help summary{cursor:pointer;color:var(--accent);font-size:13px}
+  details.help div{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.55}
+  .rowflex{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  /* Year strip */
+  .ystrip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:18px;-webkit-overflow-scrolling:touch}
+  .ycard{flex:0 0 auto;min-width:96px;border:1px solid var(--rule);border-radius:10px;background:var(--panel);padding:8px 12px;cursor:pointer;text-align:right;transition:border-color .15s}
+  .ycard:hover{border-color:var(--accent)}
+  .ycard.active{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset}
+  .ycard .yl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left}
+  .ycard .yp{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+  .ycard .yd{font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .ycard.na .yp{color:var(--muted);font-weight:400}
+  /* Sticky mini header */
+  #miniBar{position:fixed;top:0;left:0;right:0;z-index:40;background:var(--panel);border-bottom:1px solid var(--rule);padding:7px 20px;display:none;font-size:12.5px;box-shadow:0 1px 6px rgba(0,0,0,.06)}
+  #miniBar.show{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  #miniBar .mb-dirty{color:var(--warn);font-weight:600}
+  #miniBar .mb-ok{color:var(--muted)}
+  /* Holdings extras */
+  th[data-sort]{cursor:pointer;user-select:none}
+  th[data-sort].s-asc::after{content:" ↑";color:var(--accent)}
+  th[data-sort].s-desc::after{content:" ↓";color:var(--accent)}
+  tr.drill>td{background:#fafbfa;padding:10px 14px}
+  .drillbox{max-height:230px;overflow:auto;font-size:12px}
+  .drillbox table{font-size:11.5px}
+  .drillbox th,.drillbox td{padding:3px 8px}
+  .drillbox h4{margin:6px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  a.setprice{color:var(--accent);cursor:pointer;text-decoration:underline dotted}
+  /* Danger zone */
+  details.danger summary{color:var(--red);cursor:pointer;font-size:13px;margin-top:8px}
+  /* Mobile: card layout for holdings below 700px */
+  @media(max-width:700px){
+    #holdingsTable, #holdingsTable tbody, #holdingsTable tr:not(.drill), #holdingsTable td{display:block;width:100%}
+    #holdingsTable colgroup, #holdingsTable thead{display:none}
+    #holdingsTable tbody tr:not(.drill){border:1px solid var(--rule);border-radius:10px;margin-bottom:10px;padding:8px 10px}
+    #holdingsTable td{border-bottom:none;display:flex;justify-content:space-between;gap:12px;padding:3px 2px;text-align:right}
+    #holdingsTable td::before{content:attr(data-label);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;text-align:left;flex:0 0 auto}
+    #holdingsTable td:first-child{font-weight:600}
+    #holdingsTable tfoot, #holdingsTable tfoot tr, #holdingsTable tfoot td{display:block}
+    #holdingsTable tfoot tr{border-top:2px solid var(--rule);padding-top:6px}
+    tr.drill>td{display:block}
+  }
