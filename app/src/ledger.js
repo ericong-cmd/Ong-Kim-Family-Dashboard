@@ -773,7 +773,7 @@ function exportHoldingsPdf(){
   const scope=state.owner==='ALL'?'All owners':state.owner;
   const valLine=view.done
     ? 'Valued at the close of '+view.end
-    : 'Valued at latest available prices ('+view.asOf+') — '+per+' still running';
+    : 'Valued at latest available prices (oldest quote '+(priceFreshness()||view.asOf)+') — '+per+' still running';
   const cards=[
     [view.done?'Value at '+view.end:'Market value', fmtSGD(tMV)+(priced?'':' *')],
     ['Unrealised P/L', fmtSGDsign(tUnreal)],
