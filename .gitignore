@@ -9,3 +9,5 @@ app/src/seed.extra.json
 __pycache__/
 *.pyc
 .DS_Store
+.vercel
+.env*
