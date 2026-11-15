@@ -37,6 +37,10 @@ async function open(storage){
   ok(a.ev('G.txns.length') === 50, 'restore loaded 50 transactions');
   const saved = a.w.localStorage.getItem('okfo:v1');
   ok(saved && JSON.parse(saved).stores && Object.keys(JSON.parse(saved).stores.transactions).length === 50, 'saved to this browser');
+  a.ev("window.__dl = []; downloadBlob = (content, name, type) => window.__dl.push({ content, name, type });");
+  a.d.getElementById('holdingsPdfBtn').click();
+  const pdf = a.ev('window.__dl[0]');
+  ok(pdf && /\.pdf$/.test(pdf.name) && pdf.type === 'application/pdf' && Buffer.from(pdf.content).toString('latin1', 0, 8) === '%PDF-1.4', 'Export PDF on the holdings card produces a PDF file (' + (pdf && pdf.name) + ')');
   ok(a.errors.length === 0, 'no errors' + (a.errors.length ? ': ' + a.errors.join(' | ') : ''));
   const b = await open({ 'okfo:v1': saved });
   ok(b.ev('STORE_SOURCE') === 'saved' && b.ev('G.txns.length') === 50 && !b.d.getElementById('firstRun'), 'reopen in the same browser: data back, no first-run panel');

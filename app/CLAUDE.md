@@ -82,7 +82,7 @@ app/
   lib/statefile.js    read/write data/state/okfo-state.json (atomic, rev, daily snapshots)
   src/index.html, styles.css
   src/engine.js       positions, FIFO, periods, XIRR, Modified Dietz — the maths of record
-  src/calc.js         pure helpers: SGX ticks, Fibonacci, bank CSV/XLSX parsing, dividend matching, yields, premium dates, market hours, XLSX writer
+  src/calc.js         pure helpers: SGX ticks, Fibonacci, bank CSV/XLSX parsing, dividend matching, yields, premium dates, market hours, XLSX writer, PDF writer (Helvetica, no library)
   src/store.js        storage backends + backup ⇄ document conversion
   src/bridge.js       IBKR connector (Cowork: window.cowork; claude.ai artifact: mcp capability)
   src/ledger.js       Portfolio Ledger page, exports, backup/restore
@@ -95,7 +95,7 @@ app/
   tools/dividends.js  declared-dividend check for the local data (skill: check-dividends)
   tools/bank_pdf_to_csv.py   OCR + reconcile bank PDFs → Statements/Bank/Parsed/
   tools/extract.js    pulls `// @file` code blocks out of the plan document (historical)
-  test/               engine, engine.basis, dividends, calc, store, bank_pdf (python), server, smoke + claude (jsdom)
+  test/               engine, engine.basis, dividends, pdf, calc, store, bank_pdf (python), server, smoke + claude (jsdom)
 ```
 
 All `src/*.js` modules share one global scope in load order (see `ORDER` in lib/assemble.js); the
@@ -136,6 +136,10 @@ build refuses duplicate top-level names. Don't put a literal `</script>` in sour
 - Deletes in the page use the inline "Delete? [Delete] [Cancel]" confirmation (Cowork blocks pop-ups).
   Other confirmations go through `confirmDialog` / `typedConfirm` (shell.js): native dialogs locally and
   in Cowork, an in-page dialog in the claude.ai artifact (it never shows `confirm()`/`prompt()`).
+- **Holdings PDF:** *Export PDF* (holdings card, and *Export & data*) writes a real PDF file in the page
+  (calc.js `pdfDoc`, ledger.js `holdingsPdfBytes`) — works in every mode. A4 landscape, font scaled to fit
+  one page; long lists continue with the header repeated. *Print holdings (1 page)* keeps the print
+  layout where a print dialog exists (hidden in the claude.ai artifact).
 - **The website (Vercel) never embeds data either:** `npm run build:web` → `app/dist/web/index.html`;
   `vercel.json` builds it on every push. Each browser keeps its own records (localStorage), loaded once
   from a Backup JSON. No IBKR there — prices and dividends refresh in the artifact or on the Mac.

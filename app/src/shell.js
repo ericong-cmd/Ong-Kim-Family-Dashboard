@@ -223,7 +223,7 @@ function typedConfirm(message, word){
 async function saveViaClaude(content, name){
   const dl = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('downloads') : null;
   if (!dl){ toast('Saving files isn’t available in this view'); return; }
-  try { await dl.save({ filename: name, data: content instanceof Blob || typeof content === 'string' ? content : new Blob([content]) }); }
+  try { await dl.save({ filename: name, data: content }); }   // string, Blob or bytes — the capability takes each as is
   catch (e) { if (e && e.code !== 'declined') toast('Couldn’t save ' + name + ' (' + (e.code || e.message) + ')'); }
 }
 function showFirstRun(){

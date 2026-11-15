@@ -119,7 +119,7 @@
   </section>
 
   <section class="card">
-    <div class="card-head"><h2>Holdings</h2><span class="hint" id="holdingsCap"></span></div>
+    <div class="card-head"><h2>Holdings</h2><span class="hint" id="holdingsCap"></span><button type="button" id="holdingsPdfBtn" class="ghost" title="Save the holdings table for the selected owner and period as a PDF">Export PDF</button></div>
     <div class="scroll">
       <table id="holdingsTable">
         <colgroup>
@@ -218,7 +218,8 @@
       <div class="actions">
         <button type="button" id="xlsxBtn" class="primary">Export .xlsx</button>
         <button type="button" id="csvBtn" class="ghost">Export holdings CSV</button>
-        <button type="button" id="pdfBtn" class="ghost" title="One-page PDF of the holdings for the selected period">Export holdings PDF (1 page)</button>
+        <button type="button" id="pdfFileBtn" class="ghost" title="PDF file of the holdings table for the selected owner and period">Export holdings PDF</button>
+        <button type="button" id="pdfBtn" class="ghost" title="Print the one-page holdings layout (or save it as PDF from the print dialog)">Print holdings (1 page)</button>
       </div>
       <div class="actions">
         <button type="button" id="jsonBtn" class="ghost">Backup JSON (whole ledger)</button>

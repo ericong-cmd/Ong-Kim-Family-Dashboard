@@ -316,6 +316,74 @@ function dividendCandidates(lines, txns, learned, opts){
   return cands;
 }
 
+// ---------- PDF writer (no external library; one file that works in every mode, no print dialog) ----------
+// Standard Helvetica / Helvetica-Bold with WinAnsi encoding, so nothing is embedded and text stays
+// selectable. Widths are the Adobe AFM metrics (1/1000 em) for codes 32–126, used to right-align numbers.
+const _HELV = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+const _HELVB = [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584];
+// WinAnsi codes (and widths) for the non-ASCII characters the dashboard prints
+const _WIN = { '—': [0x97, 1000, 1000], '–': [0x96, 556, 556], '·': [0xb7, 278, 278], '’': [0x92, 222, 278], '‘': [0x91, 222, 278], '×': [0xd7, 584, 584], '…': [0x85, 1000, 1000], ' ': [0x20, 278, 278] };
+function _pdfChars(str){
+  // → array of [code, regular width, bold width]; U+2212 minus is set as a hyphen, anything else unknown as '?'
+  return Array.from(String(str == null ? '' : str)).map(ch => {
+    if (ch === '−') ch = '-';
+    const c = ch.charCodeAt(0);
+    if (c >= 32 && c <= 126) return [c, _HELV[c - 32], _HELVB[c - 32]];
+    return _WIN[ch] || [63, 556, 611];
+  });
+}
+function pdfTextWidth(str, size, bold){ return _pdfChars(str).reduce((w, c) => w + c[bold ? 2 : 1], 0) * size / 1000; }
+function _pdfFit(str, size, bold, maxW){
+  if (!maxW || pdfTextWidth(str, size, bold) <= maxW) return String(str == null ? '' : str);
+  let s = String(str); while (s.length > 1 && pdfTextWidth(s + '...', size, bold) > maxW) s = s.slice(0, -1);
+  return s.replace(/\s+$/, '') + '...';
+}
+// pdfDoc({width, height}) → {page(), text(x, y, str, {size, bold, color:[r,g,b], align:'left'|'right'|'center', maxWidth}),
+// line(x1, y1, x2, y2, {width, color}), rect(x, y, w, h, {fill:[r,g,b]}), bytes() → Uint8Array}. y runs down from the top edge.
+function pdfDoc(opts){
+  const W = (opts && opts.width) || 595.28, H = (opts && opts.height) || 841.89;
+  const pages = []; let cur = null;
+  const n2 = v => (Math.round(v * 100) / 100).toString();
+  const col = c => (c || [0, 0, 0]).map(v => n2(v)).join(' ');
+  const api = {
+    width: W, height: H,
+    page(){ cur = []; pages.push(cur); return api; },
+    text(x, y, str, o){
+      o = o || {}; const size = o.size || 10, bold = !!o.bold;
+      const s = _pdfFit(str, size, bold, o.maxWidth);
+      const w = pdfTextWidth(s, size, bold);
+      const x0 = o.align === 'right' ? x - w : o.align === 'center' ? x - w / 2 : x;
+      const bytes = _pdfChars(s).map(c => { const ch = String.fromCharCode(c[0]); return ch === '\\' || ch === '(' || ch === ')' ? '\\' + ch : ch; }).join('');
+      cur.push('BT ' + col(o.color) + ' rg /' + (bold ? 'F2' : 'F1') + ' ' + n2(size) + ' Tf ' + n2(x0) + ' ' + n2(H - y) + ' Td (' + bytes + ') Tj ET');
+      return w;
+    },
+    line(x1, y1, x2, y2, o){ o = o || {}; cur.push(col(o.color) + ' RG ' + n2(o.width || 0.5) + ' w ' + n2(x1) + ' ' + n2(H - y1) + ' m ' + n2(x2) + ' ' + n2(H - y2) + ' l S'); },
+    rect(x, y, w, h, o){ o = o || {}; cur.push(col(o.fill || [0.95, 0.95, 0.95]) + ' rg ' + n2(x) + ' ' + n2(H - y - h) + ' ' + n2(w) + ' ' + n2(h) + ' re f'); },
+    bytes(){
+      const objs = [];   // index i → object number i+1
+      const add = body => { objs.push(body); return objs.length; };
+      const catalog = add(''), pagesObj = add('');
+      const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+      const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+      const kids = pages.map(ops => {
+        const stream = ops.join('\n');
+        const content = add('<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream');
+        return add('<< /Type /Page /Parent ' + pagesObj + ' 0 R /MediaBox [0 0 ' + n2(W) + ' ' + n2(H) + '] /Resources << /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2 + ' 0 R >> >> /Contents ' + content + ' 0 R >>');
+      });
+      objs[catalog - 1] = '<< /Type /Catalog /Pages ' + pagesObj + ' 0 R >>';
+      objs[pagesObj - 1] = '<< /Type /Pages /Kids [' + kids.map(k => k + ' 0 R').join(' ') + '] /Count ' + kids.length + ' >>';
+      let out = '%PDF-1.4\n%\xe2\xe3\xcf\xd3\n'; const offs = [];
+      objs.forEach((b, i) => { offs.push(out.length); out += (i + 1) + ' 0 obj\n' + b + '\nendobj\n'; });
+      const xref = out.length;
+      out += 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n' + offs.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+      out += 'trailer\n<< /Size ' + (objs.length + 1) + ' /Root ' + catalog + ' 0 R >>\nstartxref\n' + xref + '\n%%EOF\n';
+      const u = new Uint8Array(out.length); for (let i = 0; i < out.length; i++) u[i] = out.charCodeAt(i) & 0xff;
+      return u;
+    }
+  };
+  return api;
+}
+
 // ---------- XLSX writer (no external library — the artifact sandbox can't load SheetJS) ----------
 // sheets: [{name, rows:[[cell…]], cols:[{w, fmt}]}]. A cell is a string, a number, null/'' (empty) or
 // {v, fmt}. Column/cell fmt: 'money' (#,##0.00, negatives red), 'pct' (0.00%), 'qty' (#,##0.####),
@@ -464,6 +532,6 @@ if (typeof module !== 'undefined' && module.exports){
   module.exports = { sgxTick, roundToTick, onTick, snapToTick, fibLevels, fibRecommend, swingFromBars, ruleStatus, buyTier,
     parseCSV, toISODate, toNum, to24h, round2, dayDiff, parseBankStatement, categorise, lineKey, cashPositions,
     xlsxToRows, normName, buildNameMap, matchTicker, payerOf, dividendCandidates, doubleCountedInSpecie, xlsxWrite,
-    propertyYields, portfolioYields, nextDue, addMonths, instalment, sgtParts, marketState, shouldAutoRefresh,
+    pdfDoc, pdfTextWidth, propertyYields, portfolioYields, nextDue, addMonths, instalment, sgtParts, marketState, shouldAutoRefresh,
     FREQ_PER_YEAR, FREQ_MONTHS };
 }

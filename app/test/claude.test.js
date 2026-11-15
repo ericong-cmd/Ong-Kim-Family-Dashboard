@@ -98,7 +98,12 @@ const answer = async (d, typed) => {   // wait for the in-page dialog, then conf
 
   // ---------- 3. downloads and prices ----------
   a.ev('downloadBlob("a,b\\n1,2", "test.csv", "text/csv")'); await sleep(20);
-  ok(a.calls.saves.length === 1 && a.calls.saves[0].filename === 'test.csv', 'file saves go through the downloads capability');
+  a.d.getElementById('holdingsPdfBtn').click(); await sleep(50);
+  const pdfSave = a.calls.saves.find(x => /\.pdf$/.test(x.filename));
+  const pdfHead = pdfSave && Buffer.from(pdfSave.data).toString('latin1', 0, 8);
+  ok(pdfSave && /^portfolio-holdings_all-owners_FY\d{4}_\d{4}-\d{2}-\d{2}\.pdf$/.test(pdfSave.filename) && pdfHead === '%PDF-1.4', 'Export PDF on the holdings card saves a real PDF through the downloads capability (' + (pdfSave && pdfSave.filename) + ')');
+  ok(!a.d.getElementById('holdingsPdfBtn').hidden && !a.d.getElementById('pdfFileBtn').hidden && a.d.getElementById('pdfBtn').hidden, 'PDF export buttons shown; print-only button hidden (no print dialog here)');
+  ok(a.calls.saves.some(x => x.filename === 'test.csv'), 'file saves go through the downloads capability');
   await a.ev('autoRefreshPrices(true)');
   ok(a.calls.mcp.some(c => c.server === 'Interactive Brokers' && c.tool === 'get_price_snapshot'), 'prices fetched through the Interactive Brokers connector');
   ok(a.ev('G.prices.T1 && G.prices.T1.price') === 1.57 && a.ev('G.prices.T1.source') === 'IBKR', 'refreshed price stored exactly as quoted (1.57, source IBKR)');

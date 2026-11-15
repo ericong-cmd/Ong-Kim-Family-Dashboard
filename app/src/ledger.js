@@ -736,6 +736,72 @@ function downloadBlob(content,name,type){ if(STORE_BACKEND==='claude') return sa
    It recomputes rows through the SAME helpers the table uses (periodView / heldDuringPeriod /
    periodRealised), so the printout can never drift from what is on screen. Font size steps down
    with row count so everything lands on a single page. */
+/* ---------- export: holdings table as a PDF file (calc.js pdfDoc — no print dialog, so it works in
+   every mode, the claude.ai artifact included). A4 landscape; the font scales with the row count so a
+   normal portfolio fits one page; a long one continues on further pages with the header repeated. */
+function holdingsPdfBytes(){
+  const H=holdingsExport(), view=H.view, per=periodLabel(state.fy,state.basis), perShort=H.period;
+  if(!H.rows.length) return null;
+  const scope=state.owner==='ALL'?'All owners':state.owner;
+  const valLine=view.done?'Valued at the close of '+view.end:'Valued at latest available prices (oldest quote '+(priceFreshness()||view.asOf)+') — '+per+' still running';
+  const d=pdfDoc({width:841.89,height:595.28}), W=d.width, Hh=d.height, M=28, INK=[0.08,0.09,0.1], MUTE=[0.36,0.39,0.44], RED=[0.7,0.15,0.12], RULE=[0.86,0.88,0.87];
+  const cols=[['Equity',146,'l'],['Owner',108,'l'],['Qty',54],['Cost',84],['Avg /sh',44],['Price',44],['Mkt value',84],['Wt %',42],['Unreal. P/L',78],['Unreal. %',44],['Realised '+perShort,72],['Divs '+perShort,66]];
+  const k=(W-2*M)/cols.reduce((s,c)=>s+c[1],0); let x=M; cols.forEach(c=>{ c.x=x; c.w=c[1]*k; x+=c.w; });
+  const firstTop=118, nextTop=78, foot=24;
+  const fit=(top,rows)=>(Hh-M-foot-top)/((rows+1)*1.95);       // font size that fits `rows` + header row
+  const n=H.rows.length+1;                                     // + total row
+  let fs=Math.max(5.6,Math.min(8.5,fit(firstTop,n)));
+  const rowH=fs*1.95, per1=Math.max(1,Math.floor((Hh-M-foot-firstTop)/rowH)-1), perN=Math.max(1,Math.floor((Hh-M-foot-nextTop)/rowH)-1);
+  const pages=[]; let rest=H.rows.slice(); pages.push(rest.splice(0,per1)); while(rest.length) pages.push(rest.splice(0,perN));
+  if(pages[pages.length-1].length>=(pages.length===1?per1:perN)) pages.push([]);   // room for the total row
+  const neg=v=>v!=null&&v<-1e-9;
+  pages.forEach((rows,pi)=>{
+    d.page();
+    d.text(M,40,'Portfolio Holdings — '+per,{size:15,bold:true,color:INK,maxWidth:W-2*M-190});
+    d.text(W-M,32,'Ong & Kim Family Trust Pte Ltd',{size:8,align:'right',color:MUTE});
+    d.text(W-M,43,'Generated '+todayISO(),{size:8,align:'right',color:MUTE});
+    d.text(M,56,scope+' · '+valLine,{size:8,color:MUTE,maxWidth:W-2*M});
+    d.line(M,63,W-M,63,{width:1.2,color:INK});
+    let y=pi===0?firstTop:nextTop;
+    if(pi===0){
+      const t=H.total, cards=[['MARKET VALUE',fmtSGD(t.mv),t.mv],['UNREALISED P/L',fmtSGDsign(t.unreal),t.unreal],['REALISED P/L ('+perShort+')',fmtSGDsign(t.real),t.real],['DIVIDENDS ('+perShort+')',fmtSGD(t.div),t.div],['COST OF HOLDINGS',fmtSGD(t.cost),t.cost]];
+      let cx=M; cards.forEach(c=>{ d.text(cx,80,c[0],{size:6.5,color:MUTE}); const w=d.text(cx,95,c[1],{size:11,bold:true,color:neg(c[2])?RED:INK}); cx+=Math.max(w,pdfTextWidth(c[0],6.5))+26; });
+    }
+    // header row
+    cols.forEach(c=>d.text(c[2]==='l'?c.x+2:c.x+c.w-2,y+rowH*0.66,c[0],{size:fs*0.82,bold:true,color:MUTE,align:c[2]==='l'?'left':'right',maxWidth:c.w-4}));
+    y+=rowH; d.line(M,y,W-M,y,{width:0.8,color:INK});
+    const cell=(c,v,o)=>d.text(c[2]==='l'?c.x+2:c.x+c.w-2,y+rowH*0.68,v,Object.assign({size:fs,color:INK,align:c[2]==='l'?'left':'right',maxWidth:c.w-4},o||{}));
+    rows.forEach(r=>{
+      const held=r.qty>1e-6, pct=(r.unreal!=null&&r.cost>1e-9)?r.unreal/r.cost:null;
+      const tk=(r.ticker||'')+(r.sgd?'':' '+(r.currency||'')), tw=pdfTextWidth(tk,fs*0.85);
+      d.text(cols[0].x+2,y+rowH*0.68,r.equity,{size:fs,color:INK,maxWidth:cols[0].w-tw-8});
+      d.text(cols[0].x+cols[0].w-2,y+rowH*0.68,tk,{size:fs*0.85,color:MUTE,align:'right'});
+      cell(cols[1],r.owner);
+      cell(cols[2],held?fmtQty(r.qty):'—'); cell(cols[3],held?fmtSGD(r.cost):'—'); cell(cols[4],held?fmtNum(r.avg,4):'—');
+      cell(cols[5],r.price!=null?fmtNum(r.price,4):'—'); cell(cols[6],r.mv!=null?fmtSGD(r.mv):'—'); cell(cols[7],r.wt!=null?fmtPct(r.wt):'—');
+      cell(cols[8],r.unreal!=null?fmtSGDsign(r.unreal):'—',{color:neg(r.unreal)?RED:INK}); cell(cols[9],pct!=null?fmtPct(pct):'—',{color:neg(pct)?RED:MUTE});
+      cell(cols[10],Math.abs(r.real)>1e-9?fmtSGDsign(r.real):'—',{color:neg(r.real)?RED:INK}); cell(cols[11],Math.abs(r.div)>1e-9?fmtSGD(r.div):'—');
+      y+=rowH; d.line(M,y,W-M,y,{width:0.3,color:RULE});
+    });
+    if(pi===pages.length-1){
+      const t=H.total; d.line(M,y,W-M,y,{width:0.9,color:INK});
+      const B={bold:true,maxWidth:null};   // totals are never cut short; right-aligned, they run into the empty cell on their left
+      cell(cols[0],'Total (SGD only)',B); cell(cols[3],fmtSGD(t.cost),B); cell(cols[6],fmtSGD(t.mv),B); cell(cols[7],t.wt!=null?fmtPct(t.wt):'',B);
+      cell(cols[8],fmtSGDsign(t.unreal),Object.assign({color:neg(t.unreal)?RED:INK},B)); cell(cols[9],t.cost>1e-9?fmtPct(t.unreal/t.cost):'',Object.assign({color:neg(t.unreal)?RED:MUTE},B));
+      cell(cols[10],fmtSGDsign(t.real),Object.assign({color:neg(t.real)?RED:INK},B)); cell(cols[11],fmtSGD(t.div),B);
+    }
+    d.text(M,Hh-M+4,'All figures in SGD. Cost basis FIFO. Realised P/L and dividends are for '+per+'. '+H.rows.length+' positions.',{size:6.5,color:MUTE});
+    d.text(W-M,Hh-M+4,'Page '+(pi+1)+' of '+pages.length,{size:6.5,color:MUTE,align:'right'});
+  });
+  return d.bytes();
+}
+function exportHoldingsPdfFile(){
+  const bytes=holdingsPdfBytes();
+  if(!bytes){ toast('Nothing to export for '+periodLabel(state.fy,state.basis)); return; }
+  downloadBlob(bytes,`portfolio-holdings_${scopeTag()}_${state.basis}${state.fy}_${todayISO()}.pdf`,'application/pdf');
+  toast('Holdings PDF exported');
+}
+
 function exportHoldingsPdf(){
   const heldSet=heldDuringPeriod(G.txns, state.owner, state.fy, state.basis);
   const view=periodView(); const pm=view.priceMap;
@@ -1112,6 +1178,8 @@ function wire(){
   document.getElementById('xlsxBtn').addEventListener('click',exportXlsx);
   document.getElementById('csvBtn').addEventListener('click',()=>exportCsv(false));
   document.getElementById('pdfBtn').addEventListener('click',exportHoldingsPdf);
+  document.getElementById('pdfFileBtn').addEventListener('click',exportHoldingsPdfFile);
+  document.getElementById('holdingsPdfBtn').addEventListener('click',exportHoldingsPdfFile);
   document.getElementById('jsonBtn').addEventListener('click',backupJson);
   document.getElementById('restoreInput').addEventListener('change',e=>{ if(e.target.files[0]) restoreJson(e.target.files[0]); e.target.value=''; });
   document.getElementById('demoBtn').addEventListener('click',loadDemo);
