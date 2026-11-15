@@ -12,6 +12,9 @@ const HTML = fs.readFileSync(path.join(APP, 'dist', 'family-office.claude.html')
 let failed = 0; const ok = (c, n) => { console.log((c ? '  PASS' : '  FAIL') + '  ' + n); if (!c) failed++; };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const UID = 'viewer-1';
+// YYYYMMDD n days from today (SGT), as IBKR writes corporate-action dates
+const ymd = n => new Date(Date.now() + 8 * 3600e3 + n * 86400000).toISOString().slice(0, 10).replace(/-/g, '');
+const iso = n => ymd(n).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
 
 function fakeDb(store){
   const ref = p => ({
@@ -46,7 +49,9 @@ async function open(store, extra = {}){
     mcp: { callTool: async (server, tool, input) => {
       calls.mcp.push({ server, tool, input });
       if (tool === 'get_price_snapshot') return { payload: { last: { price: 1.57, ts: 1790900000 } } };
-      if (tool === 'search_contracts') return { payload: { results: [{ exchange: 'SGX', symbol: input.query, underlying_contract_id: 999 }] } };
+      if (tool === 'search_contracts') return { payload: { results: [{ exchange: 'SGX', symbol: input.query, underlying_contract_id: input.query === 'T1' ? 111 : 999 }] } };
+      if (tool === 'get_price_history' && input.include_corporate_actions)
+        return { payload: { time: [], close: [], corp_actions: input.contract_id === 111 ? [{ type: 'CashDividends', date: ymd(-10), announce_date: ymd(-20), payment_date: ymd(5), value: '0.05', currency: 'SGD' }, { type: 'CashDividends', date: ymd(20), payment_date: ymd(35), value: '0.04', currency: 'SGD' }] : [] } };
       return { payload: { time: ['2026-10-01T00:00:00'], close: [1.5] } };
     } }
   };
@@ -97,12 +102,22 @@ const answer = async (d, typed) => {   // wait for the in-page dialog, then conf
   await a.ev('autoRefreshPrices(true)');
   ok(a.calls.mcp.some(c => c.server === 'Interactive Brokers' && c.tool === 'get_price_snapshot'), 'prices fetched through the Interactive Brokers connector');
   ok(a.ev('G.prices.T1 && G.prices.T1.price') === 1.57 && a.ev('G.prices.T1.source') === 'IBKR', 'refreshed price stored exactly as quoted (1.57, source IBKR)');
+  // declared dividends: T1 (35 synthetic buys, 27,335 sh) went XD 10 days ago at 0.05 → S$1,366.75 booked on XD
+  const before = a.ev('G.txns.length');
+  await a.ev('autoCheckDividends(true)');
+  const dv = a.ev('JSON.stringify(G.txns.filter(t => t.type === "DIVIDEND" && t.ticker === "T1"))');
+  const d1 = JSON.parse(dv);
+  ok(a.calls.mcp.some(c => c.tool === 'get_price_history' && c.input.include_corporate_actions === true), 'dividend check reads IBKR corporate actions');
+  ok(d1.length === 1 && d1[0].dividend === 1366.75 && d1[0].date === iso(-10) && d1[0].paymentDate === iso(5) && a.ev('G.txns.length') === before + 1, 'declared dividend booked on XD: 27,335 sh × 0.05 = S$1,366.75, payment date kept');
+  ok(/Upcoming/.test(a.d.getElementById('divList').textContent) && /1,093\.40/.test(a.d.getElementById('divList').textContent), 'upcoming dividend listed with its estimate (27,335 × 0.04 = S$1,093.40)');
+  await a.ev('autoCheckDividends(true)');
+  ok(a.ev('G.txns.filter(t => t.type === "DIVIDEND" && t.ticker === "T1").length') === 1, 'checking again books nothing twice');
   await sleep(900);
   ok(a.errors.length === 0, 'no errors in the first session' + (a.errors.length ? ': ' + a.errors.join(' | ') : ''));
 
   // ---------- 4. reopen from the database ----------
   const b = await open(store);
-  ok(b.ev('STORE_SOURCE') === 'saved' && b.ev('G.txns.length') === 1400, 'reopened from the database with all 1,400 transactions');
+  ok(b.ev('STORE_SOURCE') === 'saved' && b.ev('G.txns.length') === 1401 && b.ev('G.txns.some(t => t.type === "DIVIDEND" && t.ticker === "T1" && t.paymentDate)'), 'reopened from the database: 1,400 transactions + the booked dividend (payment date kept)');
   ok(b.ev('Object.keys(DOC.stores.policies).length') === 1 && b.ev('Object.keys(DOC.stores.properties).length') === 1, 'registers restored');
   ok(b.ev('G.prices.T1.source') === 'IBKR', 'refreshed price kept');
   ok(!b.d.getElementById('firstRun'), 'no first-run panel once data exists');

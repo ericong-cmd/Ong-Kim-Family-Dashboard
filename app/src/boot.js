@@ -85,7 +85,9 @@ async function boot(){
   const fromFolder = importInbox();
   Object.values(DOC.stores.maps || {}).forEach(m => { if (String(m.key).startsWith('cid:')) IBKR_CONTRACTS[m.key.slice(4)] = m.value; });
   await loadAll();
-  populateOwner(); wire(); shellInit(); applyClaudeMode(); renderAll();
+  populateOwner(); wire(); shellInit(); applyClaudeMode(); renderAll(); renderDividendWatch();
+  const divBtn = document.getElementById('divCheckBtn');
+  if (divBtn) divBtn.addEventListener('click', () => autoCheckDividends(true).catch(e => toast('Dividend check failed: ' + e.message)));
   const last = (DOC.stores.meta.lastPage || {}).value;
   showPage(['rules', 'ledger', 'cash', 'property', 'insurance'].includes(last) ? last : 'ledger');
   if (fromFolder) toast(fromFolder + ' new bank statement line' + (fromFolder === 1 ? '' : 's') + ' loaded from Statements/Bank');
@@ -93,7 +95,8 @@ async function boot(){
   if (fixed) toast('Corrected ' + fixed + ' in-specie distribution counted twice (Keppel REIT units, 8 May 2026)');
   if (src === 'memory') toast(STORE_BACKEND === 'claude' ? 'Sign in to Claude to save — changes in this view are not kept. Back up JSON before closing.' : 'This view can’t save on the device — back up JSON before closing.');
   if (src === 'empty' && STORE_BACKEND === 'claude') showFirstRun();
-  window.__refreshDone = autoRefreshPrices(false).catch(e => { console.warn('price refresh failed', e); toast('Price refresh failed: ' + e.message); });
+  window.__refreshDone = autoRefreshPrices(false).catch(e => { console.warn('price refresh failed', e); toast('Price refresh failed: ' + e.message); })
+    .then(() => autoCheckDividends(false)).catch(e => { console.warn('dividend check failed', e); toast('Dividend check failed: ' + e.message); });
 }
 window.__refreshDone = Promise.resolve();
 window.__bootDone = boot().catch(e => { console.error(e); toast('Start-up error: ' + e.message); });

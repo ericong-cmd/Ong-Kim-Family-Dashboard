@@ -60,7 +60,7 @@ node app/tools/state.js export                  # → data/backups/portfolio-led
 
 | Store | Key | Holds |
 |---|---|---|
-| transactions | id | `{type: BUY|SELL|DIVIDEND|OPENING|CORPORATE_ACTION, owner, date, ticker, equity, quantity, price, fees, dividend, factor, currency, note, acquired?}` |
+| transactions | id | `{type: BUY|SELL|DIVIDEND|OPENING|CORPORATE_ACTION, owner, date, ticker, equity, quantity, price, fees, dividend, factor, currency, note, acquired?}` — a DIVIDEND booked from a declaration also carries `paymentDate`, `caKey` (`TICKER|XD|per-share`) and `source` |
 | prices | ticker | `{ticker, price, asOf, source}` — SGX closing/last prices, **unadjusted** |
 | histprices | `date|ticker` | year-end closes used for completed periods |
 | boundaries | `owner__basis__year` | opening/closing values and opening basis (MARKET/COST) per period |
@@ -70,7 +70,7 @@ node app/tools/state.js export                  # → data/backups/portfolio-led
 | policies | id | `{insured, insurer, type, policyNo, owner, status, sumAssured, premium (annual), freq, due, paidBy, method, start, maturity, cashValue, beneficiary, riders, agent, agentContact, notes, needsDetails}` |
 | people | id | `{name, relation?}` |
 | maps | key | learned mappings: `div:<payer>` → ticker, `cid:<ticker>` → IBKR contract id |
-| meta | key | `lastPage`, `lastPriceRefresh`, `seededFrom`, one-time flags `fix:*` / `fill:*` |
+| meta | key | `lastPage`, `lastPriceRefresh`, `seededFrom`, `dividendWatch` (upcoming declared dividends, last check), one-time flags `fix:*` / `fill:*` |
 
 ## Source layout
 
@@ -88,12 +88,14 @@ app/
   src/ledger.js       Portfolio Ledger page, exports, backup/restore
   src/shell.js        navigation, drawer, forms, KPI cards, inline delete confirmation
   src/rules.js  cash.js  property.js  insurance.js     one module per tab
-  src/boot.js         start-up: one-time fixes, registry fill, statement inbox, render, auto price refresh
+  src/dividends.js    declared dividends: IBKR corporate actions → entitlement → DIVIDEND on XD (page check, once a day)
+  src/boot.js         start-up: one-time fixes, registry fill, statement inbox, render, auto price refresh, dividend check
   src/seed.extra.json folder-derived registry (people, policies, properties) from Insurance/ and Property/
   tools/state.js      data CLI (above)
+  tools/dividends.js  declared-dividend check for the local data (skill: check-dividends)
   tools/bank_pdf_to_csv.py   OCR + reconcile bank PDFs → Statements/Bank/Parsed/
   tools/extract.js    pulls `// @file` code blocks out of the plan document (historical)
-  test/               engine, engine.basis, calc, store, bank_pdf (python), server, smoke (jsdom)
+  test/               engine, engine.basis, dividends, calc, store, bank_pdf (python), server, smoke + claude (jsdom)
 ```
 
 All `src/*.js` modules share one global scope in load order (see `ORDER` in lib/assemble.js); the
@@ -124,6 +126,11 @@ build refuses duplicate top-level names. Don't put a literal `</script>` in sour
 - **Registers:** `seed.extra.json` (from the Insurance/ and Property/ folders) only **fills blanks /
   adds missing** records once (`fill:registry-2026-09-28`); it never overwrites what Eric typed and never
   re-adds records he deleted.
+- **Declared dividends** (15 Nov 2026): checked twice a week on the Mac (skill `check-dividends`,
+  scheduled task) and once a day by the artifact/Cowork page on open, from IBKR corporate actions.
+  Entitlement = shares held at the close of the day before XD, per owner; booked as a DIVIDEND **on the
+  XD date** with `paymentDate` kept. The bank match uses `paymentDate`, so the CDP credit later shows as
+  already booked. Never booked before XD; splits/scrip are reported, never booked.
 - Fibonacci levels: Buy 1-3 at 38.2/50/61.8% retracements, cut loss 78.6%, Sell 1 prior high, Sell 2-3
   at 127.2/161.8% extensions. A charting convention — say so; not advice.
 - Deletes in the page use the inline "Delete? [Delete] [Cancel]" confirmation (Cowork blocks pop-ups).

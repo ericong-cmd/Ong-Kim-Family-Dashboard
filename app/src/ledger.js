@@ -546,6 +546,9 @@ async function submitTx(ev){
   }
   if(state.editingId!=null){
     rec.id=state.editingId;
+    // keep a declared dividend's payment date and source (the bank match and the dividend check use them)
+    const prev=G.txns.find(t=>t.id===state.editingId)||{};
+    if(type==='DIVIDEND') ['paymentDate','caKey','source'].forEach(k=>{ if(prev[k]!=null) rec[k]=prev[k]; });
     await sPut('transactions',rec);
     await loadAll(); cancelEdit(); renderAll(); markDirty();
     toast('Entry updated');

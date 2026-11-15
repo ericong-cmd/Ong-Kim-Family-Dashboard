@@ -239,6 +239,59 @@ function computePeriod(txns, ownerScope, endYear, basis, boundary, prices, histP
 function computeFY(txns, ownerScope, endYear, boundary, prices){
   return computePeriod(txns, ownerScope, endYear, 'FY', boundary, prices);
 }
+// ---------- declared dividends (IBKR corporate actions) ----------
+// IBKR returns corp_actions as {type, date:'YYYYMMDD' (XD), announce_date, payment_date, value, currency}
+// per ticker. Normalise to {ticker, type, xd, pay, announced, dps, currency}.
+function _ymd(s){ s=String(s||''); return /^\d{8}$/.test(s) ? s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8) : (s.slice(0,10)||null); }
+function normaliseCorpActions(byTicker){
+  const out=[];
+  Object.entries(byTicker||{}).forEach(([tk,list])=>(list||[]).forEach(a=>{
+    out.push({ticker:String(tk).toUpperCase(), type:a.type||'CashDividends', xd:_ymd(a.date), pay:_ymd(a.payment_date), announced:_ymd(a.announce_date),
+      dps:Number(a.value), currency:a.currency||'SGD'});
+  }));
+  return out;
+}
+function _days(a,b){ return Math.round((Date.parse(a)-Date.parse(b))/86400000); }
+// Entitlement = shares held at the close of the day before XD (a buy dated on/after XD does not
+// qualify; a sale on/after XD keeps it), per owner. Booked on the XD date — the right to receive is
+// established then (SFRS(I) 9) — with the payment date kept for the bank match.
+// status: 'book' (XD passed, not in the ledger yet) · 'booked' (already in the ledger) ·
+// 'upcoming' (XD ahead; estimate on today's holding) · 'other' (non-cash action, reported only).
+// XDs older than opts.sinceDays (default 60) are left alone.
+function dividendEntitlements(txns, actions, opts){
+  opts=opts||{};
+  const today=opts.today||todayISO(), since=opts.sinceDays==null?60:opts.sinceDays;
+  const divs=(txns||[]).filter(t=>t.type==='DIVIDEND');
+  const res=[];
+  (actions||[]).forEach(a=>{
+    if(!a.xd || _days(today,a.xd)>since) return;
+    if(a.type!=='CashDividends'){ res.push({ticker:a.ticker,type:a.type,xd:a.xd,pay:a.pay,dps:a.dps,status:'other'}); return; }
+    if(!(a.dps>0)) return;
+    const upcoming=a.xd>today;
+    const asOf=upcoming?today:prevDay(a.xd);
+    const scoped=(txns||[]).filter(t=>String(t.ticker||'').toUpperCase()===a.ticker);
+    computePositions(scoped,{asOf}).forEach(p=>{
+      if(!(p.qtyHeld>1e-6)) return;
+      const qty=p.qtyHeld, amount=Math.round(qty*a.dps*100)/100;
+      const caKey=a.ticker+'|'+a.xd+'|'+a.dps;
+      const r={ticker:a.ticker,owner:p.owner,equity:p.name,type:a.type,xd:a.xd,pay:a.pay,announced:a.announced,dps:a.dps,currency:a.currency,qty,amount,caKey,status:upcoming?'upcoming':'book',matchId:null};
+      if(!upcoming){
+        const end=a.pay&&a.pay>a.xd?a.pay:a.xd;
+        const hit=divs.find(t=>t.caKey===caKey&&t.owner===p.owner)
+          || divs.find(t=>String(t.ticker||'').toUpperCase()===a.ticker && t.owner===p.owner && _days(t.date,a.xd)>=-7 && _days(t.date,end)<=14);
+        if(hit){ r.status='booked'; r.matchId=hit.id; r.bookedAmount=num(hit.dividend); }
+      }
+      res.push(r);
+    });
+  });
+  return res.sort((x,y)=>x.xd<y.xd?-1:x.xd>y.xd?1:(x.ticker<y.ticker?-1:1));
+}
+// Ledger DIVIDEND records for entitlements to book.
+function dividendRecords(ents){
+  return (ents||[]).filter(e=>e.status==='book').map(e=>({type:'DIVIDEND',owner:e.owner,ticker:e.ticker,equity:e.equity,date:e.xd,
+    paymentDate:e.pay||null,dividend:e.amount,quantity:0,currency:e.currency||'SGD',caKey:e.caKey,source:'IBKR corporate action',
+    note:'Declared dividend '+e.dps+'/sh × '+e.qty.toLocaleString('en-SG')+' sh · XD '+e.xd+(e.pay?' · payable '+e.pay:'')+' · added from IBKR corporate actions'}));
+}
 if(typeof module!=='undefined' && module.exports){
-  module.exports={todayISO,fyEndYear,fyBounds,fyLabel,cyYear,periodKey,periodBounds,periodLabel,computePositions,liveValue,xirr,computeFY,computePeriod,costBasisAt,prevDay,marketValueAt,heldDuringPeriod};
+  module.exports={todayISO,fyEndYear,fyBounds,fyLabel,cyYear,periodKey,periodBounds,periodLabel,computePositions,liveValue,xirr,computeFY,computePeriod,costBasisAt,prevDay,marketValueAt,heldDuringPeriod,normaliseCorpActions,dividendEntitlements,dividendRecords};
 }

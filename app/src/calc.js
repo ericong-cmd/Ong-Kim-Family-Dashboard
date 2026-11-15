@@ -287,7 +287,7 @@ function dividendCandidates(lines, txns, learned, opts){
     return { key: l.key, date: l.date, amount: round2(l.deposit), payer, ticker: tk, status: tk ? 'new' : 'unmapped', matchId: null, matchIds: [] };
   });
   const ledger = (txns || []).filter(t => t.type === 'DIVIDEND')
-    .map(t => ({ id: t.id, ticker: String(t.ticker || '').toUpperCase(), date: t.date, amount: round2(t.dividend), used: false }));
+    .map(t => ({ id: t.id, ticker: String(t.ticker || '').toUpperCase(), date: t.paymentDate || t.date, amount: round2(t.dividend), used: false }));   // XD-booked dividends meet the bank on their payment date
   const near = (t, c) => t.ticker === c.ticker && Math.abs(dayDiff(t.date, c.date)) <= tol;
   cands.filter(c => c.ticker).forEach(c => {
     let best = null;

@@ -8,8 +8,8 @@
     "build": "node app/build.js",
     "build:claude": "node app/build.js --claude",
     "state": "node app/tools/state.js",
-    "test": "node app/build.js && node app/test/engine.test.js && node app/test/engine.basis.test.js && node app/test/calc.test.js && node app/test/store.test.js && python3 app/test/bank_pdf.test.py && node app/test/server.test.js && node app/test/smoke.test.js && node app/test/claude.test.js",
-    "test:quick": "node app/test/engine.test.js && node app/test/engine.basis.test.js && node app/test/calc.test.js && node app/test/store.test.js"
+    "test": "node app/build.js && node app/test/engine.test.js && node app/test/engine.basis.test.js && node app/test/dividends.test.js && node app/test/calc.test.js && node app/test/store.test.js && python3 app/test/bank_pdf.test.py && node app/test/server.test.js && node app/test/smoke.test.js && node app/test/claude.test.js",
+    "test:quick": "node app/test/engine.test.js && node app/test/engine.basis.test.js && node app/test/dividends.test.js && node app/test/calc.test.js && node app/test/store.test.js"
   },
   "engines": {
     "node": ">=20"

@@ -6,7 +6,7 @@
 // state from data/state/okfo-state.json.
 const fs = require('fs'), path = require('path');
 const APP = path.join(__dirname, '..'), ROOT = path.join(APP, '..'), SRC = path.join(APP, 'src');
-const ORDER = ['engine', 'calc', 'store', 'bridge', 'ledger', 'shell', 'rules', 'cash', 'property', 'insurance', 'boot'];
+const ORDER = ['engine', 'calc', 'store', 'bridge', 'ledger', 'shell', 'rules', 'cash', 'property', 'insurance', 'dividends', 'boot'];
 const REGISTRY_VERSION = 'registry-2026-09-28';
 
 const newest = (dir, re) => { if (!fs.existsSync(dir)) return null; const f = fs.readdirSync(dir).filter(n => re.test(n)).sort().pop(); return f ? path.join(dir, f) : null; };

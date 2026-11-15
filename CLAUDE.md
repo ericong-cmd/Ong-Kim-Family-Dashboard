@@ -330,7 +330,8 @@ Tax computation mechanics (investment holding company — IRAS IHC basis):
 The dashboard (Rules · Portfolio Ledger · Cash on Hand · Property · Insurance) lives in `app/` — see
 **`app/CLAUDE.md`** for how it works, the data model, and the standing rules. Quick start: `npm start` →
 http://localhost:8787 (data in `data/state/okfo-state.json`); `npm test`; `node app/tools/state.js summary`.
-Project skills: `refresh-prices`, `process-bank-pdfs`, `sync-dashboard-data`, `update-registers`.
+Project skills: `refresh-prices`, `process-bank-pdfs`, `sync-dashboard-data`, `update-registers`,
+`check-dividends` (declared dividends booked on the XD date — dividend income per §5.1, right to receive).
 For the FS (§3 item 3), the year-end holdings and prices come from this data — export a Backup JSON with
 `node app/tools/state.js export` and use the Holdings/Period Summary export (*Export .xlsx*) for the year.
 `PORTING.md` lists everything that came over from Cowork.
