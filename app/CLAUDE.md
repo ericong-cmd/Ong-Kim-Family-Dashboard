@@ -136,6 +136,9 @@ build refuses duplicate top-level names. Don't put a literal `</script>` in sour
 - Deletes in the page use the inline "Delete? [Delete] [Cancel]" confirmation (Cowork blocks pop-ups).
   Other confirmations go through `confirmDialog` / `typedConfirm` (shell.js): native dialogs locally and
   in Cowork, an in-page dialog in the claude.ai artifact (it never shows `confirm()`/`prompt()`).
+- **The website (Vercel) never embeds data either:** `npm run build:web` → `app/dist/web/index.html`;
+  `vercel.json` builds it on every push. Each browser keeps its own records (localStorage), loaded once
+  from a Backup JSON. No IBKR there — prices and dividends refresh in the artifact or on the Mac.
 - **The claude.ai artifact never embeds data.** To update it: `npm run build:claude`, `npm test`, then
   publish `app/dist/family-office.claude.html` to the same URL with the Artifact tool.
 

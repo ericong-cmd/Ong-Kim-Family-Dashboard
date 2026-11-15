@@ -75,9 +75,10 @@ function assemble(opts){
   opts = opts || {};
   const root = opts.root || ROOT;
   checkGlobals();
-  const seed = opts.claude ? { format: 'portfolio-ledger', version: 3, transactions: [], prices: [], boundaries: [], histPrices: [], seedSource: null }
+  const blank = opts.claude || opts.web;
+  const seed = blank ? { format: 'portfolio-ledger', version: 3, transactions: [], prices: [], boundaries: [], histPrices: [], seedSource: null }
     : buildSeed(root);
-  const inbox = opts.claude ? { builtAt: new Date().toISOString(), files: [] } : buildInbox(root);
+  const inbox = blank ? { builtAt: new Date().toISOString(), files: [] } : buildInbox(root);
   const modules = ORDER.map(n => {
     const code = fs.readFileSync(path.join(SRC, n + '.js'), 'utf8');
     if (/<\/script/i.test(code)) throw new Error(n + '.js contains a literal </script> — split the string');
@@ -87,7 +88,8 @@ function assemble(opts){
   for (const slot of ['/*{{CSS}}*/', '{{SEED}}', '{{INBOX}}', '<!--{{SCRIPTS}}-->', '<!--{{SERVER_STATE}}-->'])
     if (!html.includes(slot)) throw new Error('index.html is missing ' + slot);
   const serverTag = opts.serverState ? '<script type="application/json" id="server-state">' + jsonForHtml(opts.serverState) + '</script>'
-    : opts.claude ? '<script type="application/json" id="claude-backend">{}</script>' : '';
+    : opts.claude ? '<script type="application/json" id="claude-backend">{}</script>'
+    : opts.web ? '<script type="application/json" id="web-build">{}</script>' : '';
   html = html.replace('/*{{CSS}}*/', () => fs.readFileSync(path.join(SRC, 'styles.css'), 'utf8'))
     .replace('<!--{{SERVER_STATE}}-->', () => serverTag)
     .replace('{{SEED}}', () => jsonForHtml(seed))

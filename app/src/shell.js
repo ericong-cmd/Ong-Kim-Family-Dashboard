@@ -231,7 +231,9 @@ function showFirstRun(){
   if (document.getElementById('firstRun')) return;
   const box = document.createElement('section');
   box.id = 'firstRun'; box.className = 'first-run';
-  box.innerHTML = '<h2>Load your data</h2><p>This dashboard starts empty. Your records are kept privately in your Claude account — no one you share the link with can see them.</p>'
+  const where = STORE_BACKEND === 'claude' ? 'Your records are kept privately in your Claude account — no one you share the link with can see them.'
+    : 'Your records are saved in this browser only, on this device — nothing is sent to the website, and other people who open the link see an empty dashboard.';
+  box.innerHTML = '<h2>Load your data</h2><p>This dashboard starts empty. ' + where + '</p>'
     + '<p>Choose your latest <b>portfolio-ledger_backup_…json</b> (from <i>Export &amp; data → Backup JSON</i> in Cowork, or <code>node app/tools/state.js export</code> on your Mac).</p>'
     + '<div class="ask-actions"><label class="btn-like primary">Choose backup file<input type="file" id="firstRunFile" accept=".json" hidden></label>'
     + '<button type="button" class="ghost" id="firstRunDismiss">Start empty</button></div>';
@@ -243,7 +245,10 @@ function showFirstRun(){
   });
   box.querySelector('#firstRunDismiss').addEventListener('click', () => box.remove());
 }
+// Web build (Vercel): no data in the page, so there is nothing bundled to reset to.
+function webBuild(){ return typeof document !== 'undefined' && !!document.getElementById('web-build'); }
 function applyClaudeMode(){
+  if (webBuild()){ const b = document.getElementById('resetBtn'); if (b) b.hidden = true; }
   if (STORE_BACKEND !== 'claude') return;
   ['pdfBtn', 'resetBtn'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; });   // no print dialog; no bundled data to reset to
   document.querySelectorAll('.hint').forEach(h => { if (/saved on this device automatically/.test(h.textContent)) h.textContent = 'Everything is saved to your Claude account automatically. Exports respect the current owner filter.'; });
