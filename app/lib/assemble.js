@@ -93,7 +93,7 @@ function assemble(opts){
     .replace('{{SEED}}', () => jsonForHtml(seed))
     .replace('{{INBOX}}', () => jsonForHtml(inbox))
     .replace('<!--{{SCRIPTS}}-->', () => modules);
-  if (opts.claude) html = artifactFragment(html);
+  if (opts.claude) html = artifactFragment(html).replace(/<title>[^<]*<\/title>/, '<title>Ong &amp; Kim Investment Artifact</title>');   // the name Eric gave the published artifact
   return { html, seed, inbox };
 }
 
