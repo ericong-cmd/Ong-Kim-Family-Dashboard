@@ -173,6 +173,7 @@ function kpiHtml(list){
 function _hm(iso){ if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
 function onStoreSaved(savedAt, ok){
   const el = document.getElementById('sideStatus'); if (!el) return;
+  if (STORE_BACKEND === 'snapshot'){ el.textContent = 'View-only snapshot' + (SNAPSHOT_INFO && SNAPSHOT_INFO.exportedAt ? ' · data as at ' + _hm(SNAPSHOT_INFO.exportedAt) : ''); return; }
   if (STORE_SOURCE === 'memory'){ el.innerHTML = '<span class="warn">Not saving on this device — back up JSON</span>'; return; }
   const where = STORE_BACKEND === 'file' ? 'Saved to data/state' : STORE_BACKEND === 'claude' ? 'Saved to your Claude account' : 'Saved on this device';
   el.innerHTML = ok === false ? '<span class="warn">Last save failed — back up JSON</span>' : (where + (savedAt ? ' · ' + esc(_hm(savedAt)) : ''));
@@ -252,4 +253,40 @@ function applyClaudeMode(){
   if (STORE_BACKEND !== 'claude') return;
   ['pdfBtn', 'resetBtn'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; });   // no print dialog; no bundled data to reset to
   document.querySelectorAll('.hint').forEach(h => { if (/saved on this device automatically/.test(h.textContent)) h.textContent = 'Everything is saved to your Claude account automatically. Exports respect the current owner filter.'; });
+}
+
+/* ---------- shared snapshot: passphrase and view-only ---------- */
+function askUnlock(){
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ask-overlay unlock-overlay'; wrap.id = 'unlockOverlay';
+    wrap.innerHTML = '<form class="ask" id="unlockForm" autocomplete="off"><h2 class="unlock-title">Ong &amp; Kim Family Office</h2>'
+      + '<p class="ask-msg">This is a private, view-only snapshot. Enter the passphrase you were given.</p>'
+      + '<label class="fld">Passphrase<input type="password" id="unlockPass" autocomplete="current-password"></label>'
+      + '<div class="hint warn" id="unlockErr" hidden>That passphrase doesn’t open this snapshot. Check it and try again.</div>'
+      + '<div class="ask-actions"><button type="submit" class="primary" id="unlockBtn">Open</button></div></form>';
+    document.body.appendChild(wrap);
+    const form = wrap.querySelector('#unlockForm'), inp = wrap.querySelector('#unlockPass'), err = wrap.querySelector('#unlockErr'), btn = wrap.querySelector('#unlockBtn');
+    form.addEventListener('submit', async e => {
+      e.preventDefault(); err.hidden = true; btn.disabled = true; btn.textContent = 'Opening…';
+      try { const backup = await unlockSnapshot(inp.value); wrap.remove(); resolve(backup); }
+      catch (x) { err.hidden = false; inp.select(); }
+      finally { btn.disabled = false; btn.textContent = 'Open'; }
+    });
+    inp.focus();
+  });
+}
+// View-only: everything that adds, edits, deletes, imports or refreshes is hidden; owner/period filters,
+// tabs and the PDF / xlsx / CSV exports stay. Nothing is saved in a snapshot anyway (store.js).
+const VIEW_ONLY_HIDE = ['newRuleBtn', 'refreshPricesBtn', 'periodSettings', 'divCheckBtn', 'recomputeBtn', 'ibkrBtn', 'jsonBtn', 'demoBtn', 'resetBtn', 'clearBtn',
+  'pdfProcessBtn', 'divCommitBtn', 'newPropBtn', 'newPersonBtn', 'newPolicyBtn', 'soldWrap'];
+const VIEW_ONLY_HIDE_CARD = ['txForm', 'dropZone', 'cashFile', 'cashDrop'];   // whole card goes
+function applyViewOnly(){
+  if (STORE_BACKEND !== 'snapshot') return;
+  document.body.classList.add('view-only');
+  VIEW_ONLY_HIDE.forEach(id => { const el = document.getElementById(id); if (el) el.hidden = true; });
+  VIEW_ONLY_HIDE_CARD.forEach(id => { const el = document.getElementById(id); const card = el && el.closest('section.card'); if (card) card.hidden = true; });
+  const restore = document.getElementById('restoreInput'); if (restore && restore.closest('label')) restore.closest('label').hidden = true;
+  document.querySelectorAll('details.danger').forEach(d => { d.hidden = true; });
+  document.querySelectorAll('.hint').forEach(h => { if (/saved on this device automatically/.test(h.textContent)) h.textContent = 'View-only snapshot. Exports respect the current owner filter.'; });
 }

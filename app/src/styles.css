@@ -274,3 +274,9 @@ button.danger-solid:hover{background:#8e1d17}
 .first-run h2{margin:0;font-family:var(--serif);font-size:20px}
 .first-run p{margin:0;max-width:65ch;color:var(--muted)}
 .first-run .ask-actions{justify-content:flex-start;margin-top:6px}
+
+/* shared snapshot: view-only + passphrase screen */
+.view-only [data-edit],.view-only [data-del],.view-only .row-actions,.view-only .card-actions{display:none!important}
+.view-only #priceList input,.view-only #page-ledger .boundaries input{pointer-events:none;border-color:transparent;background:transparent}
+.unlock-overlay{background:var(--paper)}
+.unlock-title{margin:0;font-family:var(--serif);font-size:22px;text-transform:none;letter-spacing:0;color:var(--ink)}

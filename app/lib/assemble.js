@@ -75,7 +75,7 @@ function assemble(opts){
   opts = opts || {};
   const root = opts.root || ROOT;
   checkGlobals();
-  const blank = opts.claude || opts.web;
+  const blank = opts.claude || opts.web || opts.shared;
   const seed = blank ? { format: 'portfolio-ledger', version: 3, transactions: [], prices: [], boundaries: [], histPrices: [], seedSource: null }
     : buildSeed(root);
   const inbox = blank ? { builtAt: new Date().toISOString(), files: [] } : buildInbox(root);
@@ -89,7 +89,8 @@ function assemble(opts){
     if (!html.includes(slot)) throw new Error('index.html is missing ' + slot);
   const serverTag = opts.serverState ? '<script type="application/json" id="server-state">' + jsonForHtml(opts.serverState) + '</script>'
     : opts.claude ? '<script type="application/json" id="claude-backend">{}</script>'
-    : opts.web ? '<script type="application/json" id="web-build">{}</script>' : '';
+    : opts.web ? '<script type="application/json" id="web-build">{}</script>'
+    : opts.shared ? '<script type="application/json" id="locked-seed">' + jsonForHtml(lockBackup(opts.shared.backup, opts.shared.passphrase)) + '</script>' : '';
   html = html.replace('/*{{CSS}}*/', () => fs.readFileSync(path.join(SRC, 'styles.css'), 'utf8'))
     .replace('<!--{{SERVER_STATE}}-->', () => serverTag)
     .replace('{{SEED}}', () => jsonForHtml(seed))
@@ -97,6 +98,17 @@ function assemble(opts){
     .replace('<!--{{SCRIPTS}}-->', () => modules);
   if (opts.claude) html = artifactFragment(html).replace(/<title>[^<]*<\/title>/, '<title>Ong &amp; Kim Investment Artifact</title>');   // the name Eric gave the published artifact
   return { html, seed, inbox };
+}
+
+// Shared snapshot: the backup encrypted with AES-256-GCM under a key derived from the passphrase
+// (PBKDF2-SHA256, 600,000 rounds, random salt and IV). The page decrypts it with WebCrypto.
+function lockBackup(backup, passphrase){
+  if (!passphrase) throw new Error('A passphrase is required for a shared snapshot');
+  const c = require('crypto'), salt = c.randomBytes(16), iv = c.randomBytes(12), iter = 600000;
+  const key = c.pbkdf2Sync(String(passphrase), salt, iter, 32, 'sha256');
+  const ci = c.createCipheriv('aes-256-gcm', key, iv);
+  const data = Buffer.concat([ci.update(JSON.stringify(backup), 'utf8'), ci.final(), ci.getAuthTag()]);   // WebCrypto expects the tag appended
+  return { v: 1, alg: 'AES-256-GCM/PBKDF2-SHA256', iter, salt: salt.toString('base64'), iv: iv.toString('base64'), data: data.toString('base64') };
 }
 
 // claude.ai wraps a published page in its own <!doctype>/<html>/<head>/<body>: hand it the head's
@@ -107,4 +119,4 @@ function artifactFragment(html){
   return head.trim() + '\n' + body.trim() + '\n';
 }
 
-module.exports = { assemble, buildSeed, buildInbox, newest, ROOT, APP, SRC, ORDER, REGISTRY_VERSION };
+module.exports = { lockBackup, assemble, buildSeed, buildInbox, newest, ROOT, APP, SRC, ORDER, REGISTRY_VERSION };

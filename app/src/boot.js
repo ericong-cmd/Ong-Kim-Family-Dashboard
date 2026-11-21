@@ -85,7 +85,7 @@ async function boot(){
   const fromFolder = importInbox();
   Object.values(DOC.stores.maps || {}).forEach(m => { if (String(m.key).startsWith('cid:')) IBKR_CONTRACTS[m.key.slice(4)] = m.value; });
   await loadAll();
-  populateOwner(); wire(); shellInit(); applyClaudeMode(); renderAll(); renderDividendWatch();
+  populateOwner(); wire(); shellInit(); applyClaudeMode(); applyViewOnly(); renderAll(); renderDividendWatch();
   const divBtn = document.getElementById('divCheckBtn');
   if (divBtn) divBtn.addEventListener('click', () => autoCheckDividends(true).catch(e => toast('Dividend check failed: ' + e.message)));
   const last = (DOC.stores.meta.lastPage || {}).value;

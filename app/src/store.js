@@ -7,6 +7,9 @@
                outside the page (Claude Code, tools/state.js) are never silently overwritten — the page
                reloads instead.
    • browser — localStorage (the Cowork artifact keeps it across reloads and app restarts).
+   • snapshot — a shared, view-only website (npm run build:shared): the page carries one backup,
+               encrypted (AES-256-GCM, key from a passphrase via PBKDF2-SHA256). The viewer types the
+               passphrase, it is decrypted in the browser and held in memory only — never saved.
    • claude  — when built as a claude.ai artifact (npm run build:claude): the page carries no data;
                each store is saved in the artifact's database under the viewer's private
                data/users/<id>/ subtree, split into ≤180 KB documents (the platform caps one at 256 KiB).
@@ -56,7 +59,7 @@ function backupFromDoc(doc){
 /* ---------- persistence ---------- */
 function _persist(){
   DOC.savedAt = new Date().toISOString();
-  if (STORE_SOURCE === 'memory') return;
+  if (STORE_SOURCE === 'memory' || STORE_BACKEND === 'snapshot') return;
   if (STORE_BACKEND === 'file'){ _queueServerSave(); return; }
   if (STORE_BACKEND === 'claude'){ _queueClaudeSave(); return; }
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DOC)); STORE_OK = true; }
@@ -172,8 +175,30 @@ async function _flushClaudeSave(){
     if (_claude.pending) _claude.timer = setTimeout(_flushClaudeSave, STORE_OK ? 600 : 5000);
   }
 }
-// Every backend is ready once this resolves; only the claude backend has anything to wait for.
+/* ---------- shared snapshot (view-only website) ---------- */
+function _lockedSeed(){
+  const el = typeof document !== 'undefined' && document.getElementById('locked-seed'); if (!el) return null;
+  try { return JSON.parse(el.textContent); } catch (e) { return null; }
+}
+const _b64bytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+// Resolves to the backup on the right passphrase; rejects (OperationError) on a wrong one.
+async function unlockSnapshot(pass){
+  const s = _lockedSeed(), enc = new TextEncoder();
+  const base = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: _b64bytes(s.salt), iterations: s.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: _b64bytes(s.iv) }, key, _b64bytes(s.data));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+let SNAPSHOT_INFO = null;
+// Every backend is ready once this resolves; the claude backend loads from its database, the
+// snapshot waits for the passphrase.
 async function storeReady(){
+  if (STORE_BACKEND === 'snapshot'){
+    const backup = await askUnlock();
+    DOC = _normaliseDoc(docFromBackup(backup)); STORE_SOURCE = 'snapshot';
+    SNAPSHOT_INFO = { exportedAt: backup.exportedAt || null };
+    return STORE_SOURCE;
+  }
   if (STORE_BACKEND !== 'claude') return STORE_SOURCE;
   try { return await _claudeConnect(); }
   catch (e) { console.error('artifact database unavailable', e); _seedDoc(); STORE_SOURCE = 'memory'; return STORE_SOURCE; }
@@ -217,6 +242,7 @@ function _serverState(){
   try { return JSON.parse(el.textContent); } catch (e) { return null; }
 }
 function storeInit(){
+  if (_lockedSeed()){ STORE_BACKEND = 'snapshot'; DOC = _blankDoc(); STORE_SOURCE = 'locked'; return STORE_SOURCE; }   // storeReady() asks for the passphrase
   if (_claudeMode()){ STORE_BACKEND = 'claude'; DOC = _blankDoc(); STORE_SOURCE = 'loading'; return STORE_SOURCE; }   // storeReady() loads
   const ss = _serverState();
   if (ss){                                    // served by app/server.js → data lives in data/state/
