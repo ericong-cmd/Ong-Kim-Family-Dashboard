@@ -922,6 +922,22 @@ async function backupJson(){
   downloadBlob(JSON.stringify(data,null,2),`portfolio-ledger_backup_${todayISO()}.json`,'application/json');
   markClean();
   toast('JSON backup downloaded — '+data.transactions.length+' transactions, '+data.policies.length+' policies, '+data.properties.length+' properties, '+data.rules.length+' rules');
+  if(STORE_BACKEND==='file') saveBackupAndPublish(data);
+}
+// Local dashboard: keep a copy in data/backups and let the server republish the shared link from it.
+async function saveBackupAndPublish(data){
+  try{
+    const r=await fetch('/api/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    if(!j.publishing){ toast('Backup saved to '+j.file); return; }
+    toast('Backup saved to '+j.file+' — updating the shared link…');
+    for(let i=0;i<72;i++){   // up to 6 minutes
+      await new Promise(res=>setTimeout(res,5000));
+      const p=await (await fetch('/api/publish',{cache:'no-store'})).json();
+      if(p.state==='done'){ toast(p.skipped?'Shared link already shows this backup':'Shared link updated — '+p.url); return; }
+      if(p.state==='failed'){ toast('Shared link not updated: '+p.error); return; }
+    }
+  }catch(e){ toast('Backup downloaded, but not saved to data/backups: '+e.message); }
 }
 async function restoreJson(file){
   const text=await readFileText(file); let data;

@@ -16,7 +16,7 @@ function raw(port, opts, body){
 
 (async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'okfo-state-'));
-  const { server, file, read } = createServer({ dataDir, noWatch: true });
+  const { server, file, read } = createServer({ dataDir, noWatch: true, publish: false });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const port = server.address().port, base = 'http://127.0.0.1:' + port + '/';
   const errorsOf = [];

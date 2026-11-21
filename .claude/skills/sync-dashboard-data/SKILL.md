@@ -28,3 +28,10 @@ set its `rev` higher than the current one, and restart. Never delete files.
 ## Check
 `node app/tools/state.js summary` — counts per store, cash on hand, oldest price date, policies still
 needing details, and the one-time flags (`fix:inspecie-v1`, `fill:registry-2026-09-28`).
+
+## Shared link (https://ong-kim-shared.vercel.app)
+Every backup updates it: *Backup JSON* in the local dashboard, `node app/tools/state.js export`, or a backup
+file saved into `data/backups/` while `npm start` runs. To publish by hand: `npm run publish:shared`
+(newest backup; `-- <file>` for another, `-- --force` to redeploy the same one). Needs, once on the Mac:
+`security add-generic-password -s okfo-share-pass -a okfo -w` (passphrase) and `npx vercel login`.
+If it fails, report the message — never put the passphrase or a token in the repo or the chat.

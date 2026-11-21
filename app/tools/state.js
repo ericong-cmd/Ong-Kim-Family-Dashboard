@@ -5,6 +5,7 @@
 //   node app/tools/state.js summary                      what's in the data (counts, cash, prices age)
 //   node app/tools/state.js import <backup.json>         replace the data with a Backup JSON (dashboard export)
 //   node app/tools/state.js export [file]                write a Backup JSON (default data/backups/portfolio-ledger_backup_<today>.json)
+//                                                        and publish it to the shared link (--no-publish to skip)
 //   node app/tools/state.js tickers                      held + rule tickers with IBKR contract ids and stored prices
 //   node app/tools/state.js set-prices BN4=11.30@2026-10-02 D05=40.1 [--source IBKR]
 //   node app/tools/state.js get <store> [key]            print a store or one record as JSON
@@ -68,6 +69,9 @@ switch (cmd){
     const b = S.backupFromDoc(st.doc);
     fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, JSON.stringify(b, null, 2));
     console.log('Wrote ' + path.relative(process.cwd(), out) + ' (' + b.transactions.length + ' txns, ' + b.policies.length + ' policies, ' + b.properties.length + ' properties, ' + b.rules.length + ' rules, ' + b.cash.length + ' bank lines)');
+    // every backup also updates the shared view-only link (OKFO_AUTO_PUBLISH=0 or --no-publish to skip)
+    if (process.env.OKFO_AUTO_PUBLISH !== '0' && !args.includes('--no-publish'))
+      require('./publish-shared').publishShared({ file: out }).catch(e => { console.error('Shared link not updated: ' + e.message); process.exitCode = 1; });
     break;
   }
   case 'tickers': {

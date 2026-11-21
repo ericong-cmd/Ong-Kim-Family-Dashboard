@@ -93,9 +93,10 @@ app/
   src/seed.extra.json folder-derived registry (people, policies, properties) from Insurance/ and Property/
   tools/state.js      data CLI (above)
   tools/dividends.js  declared-dividend check for the local data (skill: check-dividends)
+  tools/publish-shared.js   newest backup → encrypted view-only snapshot → ong-kim-shared.vercel.app
   tools/bank_pdf_to_csv.py   OCR + reconcile bank PDFs → Statements/Bank/Parsed/
   tools/extract.js    pulls `// @file` code blocks out of the plan document (historical)
-  test/               engine, engine.basis, dividends, pdf, markets, calc, store, bank_pdf (python), server, smoke + claude (jsdom)
+  test/               engine, engine.basis, dividends, pdf, markets, publish, shared, web, calc, store, bank_pdf (python), server, smoke + claude (jsdom)
 ```
 
 All `src/*.js` modules share one global scope in load order (see `ORDER` in lib/assemble.js); the
@@ -135,9 +136,14 @@ build refuses duplicate top-level names. Don't put a literal `</script>` in sour
   (Bursa), Hong Kong (HKEX) or the US, found with the IBKR search in the rule drawer. Keys: bare SGX tickers
   (`D05`) as before; other markets `SYMBOL.MY` / `.HK` / `.US` (calc.js `marketOfKey`). Levels round to
   that market's ticks (`tickSize`); prices are quoted on its exchange and kept in its currency.
-- **Shared snapshot** (`npm run build:shared <backup.json>`, passphrase in `OKFO_SHARE_PASS`): view-only,
-  backup encrypted in the page, deployed separately (https://ong-kim-shared.vercel.app). Rebuild and
-  redeploy to refresh it. Its strength is the passphrase.
+- **Shared snapshot** (https://ong-kim-shared.vercel.app): view-only, backup encrypted in the page.
+  **Every backup republishes it** (21 Nov 2026): *Backup JSON* in the local dashboard also saves to
+  `data/backups/` (`POST /api/backup`, never overwriting); `state.js export` publishes after writing; and
+  while `npm start` runs, any new backup file dropped into `data/backups/` (e.g. downloaded from the
+  artifact) is published. All go through `tools/publish-shared.js` (`npm run publish:shared`), which skips
+  a backup it already published. Secrets stay on the Mac: passphrase in `OKFO_SHARE_PASS` or Keychain item
+  `okfo-share-pass`; Vercel via `VERCEL_TOKEN`, Keychain `okfo-vercel-token`, or `npx vercel login`.
+  Project ids in `app/vercel-shared.json`. Its strength is the passphrase.
 - Fibonacci levels: Buy 1-3 at 38.2/50/61.8% retracements, cut loss 78.6%, Sell 1 prior high, Sell 2-3
   at 127.2/161.8% extensions. A charting convention — say so; not advice.
 - Deletes in the page use the inline "Delete? [Delete] [Cancel]" confirmation (Cowork blocks pop-ups).

@@ -12,11 +12,18 @@
 //   GET  /api/state          { rev, savedAt, doc }
 //   POST /api/state          { rev, doc } → { rev } | 409
 //   POST /api/bank/process   run tools/bank_pdf_to_csv.py on Statements/Bank → JSON summary
+//   POST /api/backup         { backup } → saved as data/backups/portfolio-ledger_backup_<date>.json
+//   GET  /api/publish        state of the shared-link publish { state: idle|running|done|failed, … }
+//
+// Shared link (https://ong-kim-shared.vercel.app): every new backup in data/backups — from Backup JSON
+// here, state.js export, or a file dropped in from the artifact — is published while the server runs
+// (tools/publish-shared.js). OKFO_AUTO_PUBLISH=0 turns it off.
 //
 // Env: PORT (8787), OKFO_DATA_DIR (data/state), OKFO_ROOT (project folder), OKFO_HOST (127.0.0.1).
 const http = require('http'), fs = require('fs'), path = require('path'), { execFile } = require('child_process');
 const { assemble, ROOT: DEFAULT_ROOT } = require('./lib/assemble');
 const { readState, writeState } = require('./lib/statefile');
+const { publishShared } = require('./tools/publish-shared');
 
 function createServer(opts){
   opts = opts || {};
@@ -25,6 +32,25 @@ function createServer(opts){
   const file = path.join(dataDir, 'okfo-state.json');
   const port = () => server.address() && server.address().port;
 
+  const backups = path.join(root, 'data', 'backups');
+  const autoPublish = opts.publish !== false && process.env.OKFO_AUTO_PUBLISH !== '0';
+  const publisher = opts.publisher || (() => publishShared({ root }));
+  const pub = { state: 'idle', again: false };
+  const runPublish = () => {
+    if (!autoPublish) return;
+    if (pub.state === 'running'){ pub.again = true; return; }
+    Object.assign(pub, { state: 'running', startedAt: new Date().toISOString(), error: null });
+    Promise.resolve().then(publisher).then(r => Object.assign(pub, { state: 'done', at: new Date().toISOString(), file: r && r.file, url: r && r.url, skipped: !!(r && r.skipped) }))
+      .catch(e => { Object.assign(pub, { state: 'failed', at: new Date().toISOString(), error: e.message }); console.error('Shared link not published: ' + e.message); })
+      .then(() => { if (pub.again){ pub.again = false; runPublish(); } });
+  };
+  let watchTimer = null, watcher = null;
+  if (autoPublish && opts.watch !== false){
+    try { fs.mkdirSync(backups, { recursive: true }); watcher = fs.watch(backups, (ev, name) => {
+      if (!/^portfolio-ledger_backup_.*\.json$/.test(String(name || ''))) return;
+      clearTimeout(watchTimer); watchTimer = setTimeout(runPublish, 3000);   // let the file finish writing
+    }); } catch (e) { console.warn('Not watching data/backups: ' + e.message); }
+  }
   const read = () => readState(file);
   const write = (state) => writeState(state, file);
   const send = (res, code, body, type) => {
@@ -74,12 +100,26 @@ function createServer(opts){
         });
         return;
       }
+      if (req.method === 'POST' && url.pathname === '/api/backup'){
+        if (!/application\/json/.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'JSON only' });
+        const data = JSON.parse(await body(req, 50 * 1024 * 1024));
+        if (!data || !Array.isArray(data.transactions)) return send(res, 400, { error: 'not a dashboard backup' });
+        fs.mkdirSync(backups, { recursive: true });
+        const day = new Date(Date.now() + 8 * 3600e3).toISOString(), date = day.slice(0, 10);
+        let name = 'portfolio-ledger_backup_' + date + '.json';
+        if (fs.existsSync(path.join(backups, name))) name = 'portfolio-ledger_backup_' + date + '_' + day.slice(11, 16).replace(':', '') + '.json';   // never overwrite
+        fs.writeFileSync(path.join(backups, name), JSON.stringify(data, null, 2));
+        if (!watcher) runPublish();   // the folder watcher picks it up otherwise
+        return send(res, 200, { file: 'data/backups/' + name, publishing: autoPublish });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/publish') return send(res, 200, Object.assign({ enabled: autoPublish }, pub));
       send(res, 404, { error: 'not found' });
     } catch (e) {
       console.error(e); send(res, 500, { error: e.message });
     }
   });
-  return { server, file, dataDir, read };
+  server.on('close', () => { if (watcher) watcher.close(); clearTimeout(watchTimer); });
+  return { server, file, dataDir, read, publishState: pub };
 }
 
 if (require.main === module){
