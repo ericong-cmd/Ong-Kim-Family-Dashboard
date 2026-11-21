@@ -1,0 +1,10 @@
+# Upload code only — never family data
+data/
+Statements/
+app/dist/
+app/src/seed.extra.json
+node_modules/
+.claude/
+*.json.tmp
+.env*
+.vercel
