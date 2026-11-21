@@ -95,7 +95,7 @@ app/
   tools/dividends.js  declared-dividend check for the local data (skill: check-dividends)
   tools/bank_pdf_to_csv.py   OCR + reconcile bank PDFs → Statements/Bank/Parsed/
   tools/extract.js    pulls `// @file` code blocks out of the plan document (historical)
-  test/               engine, engine.basis, dividends, pdf, calc, store, bank_pdf (python), server, smoke + claude (jsdom)
+  test/               engine, engine.basis, dividends, pdf, markets, calc, store, bank_pdf (python), server, smoke + claude (jsdom)
 ```
 
 All `src/*.js` modules share one global scope in load order (see `ORDER` in lib/assemble.js); the
@@ -131,6 +131,13 @@ build refuses duplicate top-level names. Don't put a literal `</script>` in sour
   Entitlement = shares held at the close of the day before XD, per owner; booked as a DIVIDEND **on the
   XD date** with `paymentDate` kept. The bank match uses `paymentDate`, so the CDP credit later shows as
   already booked. Never booked before XD; splits/scrip are reported, never booked.
+- **Rules are not limited to the portfolio** (21 Nov 2026): any stock listed in Singapore (SGX), Malaysia
+  (Bursa), Hong Kong (HKEX) or the US, found with the IBKR search in the rule drawer. Keys: bare SGX tickers
+  (`D05`) as before; other markets `SYMBOL.MY` / `.HK` / `.US` (calc.js `marketOfKey`). Levels round to
+  that market's ticks (`tickSize`); prices are quoted on its exchange and kept in its currency.
+- **Shared snapshot** (`npm run build:shared <backup.json>`, passphrase in `OKFO_SHARE_PASS`): view-only,
+  backup encrypted in the page, deployed separately (https://ong-kim-shared.vercel.app). Rebuild and
+  redeploy to refresh it. Its strength is the passphrase.
 - Fibonacci levels: Buy 1-3 at 38.2/50/61.8% retracements, cut loss 78.6%, Sell 1 prior high, Sell 2-3
   at 127.2/161.8% extensions. A charting convention — say so; not advice.
 - Deletes in the page use the inline "Delete? [Delete] [Cancel]" confirmation (Cowork blocks pop-ups).

@@ -1,23 +1,57 @@
 /* calc.js — pure functions for the family-office dashboard. No DOM. Node-testable.
    Loaded in the browser as a plain script (globals) and in Node via module.exports. */
 
-// ---------- SGX prices ----------
-// SGX minimum bid sizes: < S$0.20 → 0.001 · S$0.20 to < S$1.00 → 0.005 · ≥ S$1.00 → 0.01
-function sgxTick(p){ p = Math.abs(Number(p) || 0); return p < 0.2 ? 0.001 : p < 1 ? 0.005 : 0.01; }
-function roundToTick(p){
-  if (p == null || !isFinite(p)) return null;
-  const t = sgxTick(p);
-  return Number((Math.round(p / t) * t).toFixed(3));
+// ---------- markets and ticks ----------
+// Rules may be set on any stock listed in Singapore, Malaysia, Hong Kong or the US. Keys: SGX tickers
+// stay bare ('D05', as the ledger has always used them); other markets carry a suffix ('MAYBANK.MY',
+// '700.HK', 'AAPL.US'). `exchange` is what the IBKR connector wants for quotes and history.
+const MARKETS = {
+  SG: { label: 'Singapore (SGX)', short: 'SGX', currency: 'SGD', exchange: 'SGX' },
+  MY: { label: 'Malaysia (Bursa)', short: 'Bursa', currency: 'MYR', exchange: 'BURSAMY' },
+  HK: { label: 'Hong Kong (HKEX)', short: 'HKEX', currency: 'HKD', exchange: 'SEHK' },
+  US: { label: 'United States', short: 'US', currency: 'USD', exchange: 'SMART' }
+};
+const _US_EXCH = ['NASDAQ', 'NYSE', 'ARCA', 'AMEX', 'BATS', 'NYSEAMERICAN', 'IEX'];   // listed only — OTC (PINK, VALUE) is left out
+function listingMarket(exchange){
+  const e = String(exchange || '').toUpperCase();
+  return e === 'SGX' ? 'SG' : e === 'BURSAMY' ? 'MY' : e === 'SEHK' ? 'HK' : _US_EXCH.includes(e) ? 'US' : null;
 }
-function onTick(p){
+function marketOfKey(key){ const m = String(key || '').toUpperCase().match(/\.(MY|HK|US)$/); return m ? m[1] : 'SG'; }
+function symbolOfKey(key){ return String(key || '').toUpperCase().replace(/\.(MY|HK|US)$/, ''); }
+function listingKey(symbol, exchange){ const m = listingMarket(exchange), s = String(symbol || '').toUpperCase(); return !m || m === 'SG' ? s : s + '.' + m; }
+// IBKR search_contracts rows → stock listings on the four markets (optionally one market)
+function listingChoices(rows, market){
+  return (rows || []).filter(r => r && r.underlying_contract_id && (r.sections || []).some(x => x.security_type === 'STK'))
+    .map(r => { const m = listingMarket(r.exchange); return m && (!market || market === m) ? { key: listingKey(r.symbol, r.exchange), symbol: String(r.symbol).toUpperCase(),
+      name: r.description || r.symbol, market: m, exchange: r.exchange, conid: r.underlying_contract_id, currency: MARKETS[m].currency } : null; })
+    .filter(Boolean);
+}
+// Minimum price steps. SGX: < 0.20 → 0.001 · < 1.00 → 0.005 · ≥ 1.00 → 0.01.
+// HKEX spread table (up to and including each bound). Bursa: < 1.00 → 0.005 · < 10 → 0.01 · < 100 → 0.02 · ≥ 100 → 0.10.
+// US: < $1 → 0.0001 · ≥ $1 → 0.01.
+const _HK_TICKS = [[0.25, 0.001], [0.5, 0.005], [10, 0.01], [20, 0.02], [100, 0.05], [200, 0.1], [500, 0.2], [1000, 0.5], [2000, 1], [5000, 2], [Infinity, 5]];
+function sgxTick(p){ p = Math.abs(Number(p) || 0); return p < 0.2 ? 0.001 : p < 1 ? 0.005 : 0.01; }
+function tickSize(p, market){
+  p = Math.abs(Number(p) || 0);
+  if (market === 'HK') return _HK_TICKS.find(b => p <= b[0] + 1e-9)[1];
+  if (market === 'MY') return p < 1 ? 0.005 : p < 10 ? 0.01 : p < 100 ? 0.02 : 0.1;
+  if (market === 'US') return p < 1 ? 0.0001 : 0.01;
+  return sgxTick(p);
+}
+function roundToTick(p, market){
+  if (p == null || !isFinite(p)) return null;
+  const t = tickSize(p, market);
+  return Number((Math.round(p / t) * t).toFixed(4));
+}
+function onTick(p, market){
   if (p == null || !isFinite(p)) return false;
-  const t = sgxTick(p);
+  const t = tickSize(p, market);
   return Math.abs(p / t - Math.round(p / t)) < 1e-6;
 }
 // Quotes carry float noise (1.1300000000000001). Snap to the tick when within noise; else keep 6dp.
-function snapToTick(p){
+function snapToTick(p, market){
   if (p == null || !isFinite(p)) return null;
-  return onTick(p) ? roundToTick(p) : Number(Number(p).toFixed(6));
+  return onTick(p, market) ? roundToTick(p, market) : Number(Number(p).toFixed(6));
 }
 
 // ---------- Fibonacci ----------
@@ -30,11 +64,11 @@ function fibLevels(H, L){
     e1000: H, e1272: L + 1.272 * R, e1618: L + 1.618 * R };
 }
 // Buy 1-3 at the 38.2 / 50 / 61.8 retracements, cut loss at 78.6, sells at the prior high and the
-// 127.2 / 161.8 extensions — all rounded to a tradeable SGX tick.
-function fibRecommend(H, L){
+// 127.2 / 161.8 extensions — all rounded to a tradeable tick on the stock's market (SGX by default).
+function fibRecommend(H, L, market){
   const f = fibLevels(H, L); if (!f) return null;
-  return { buy1: roundToTick(f.r382), buy2: roundToTick(f.r500), buy3: roundToTick(f.r618), cut: roundToTick(f.r786),
-    sell1: roundToTick(f.e1000), sell2: roundToTick(f.e1272), sell3: roundToTick(f.e1618) };
+  const r = v => roundToTick(v, market);
+  return { buy1: r(f.r382), buy2: r(f.r500), buy3: r(f.r618), cut: r(f.r786), sell1: r(f.e1000), sell2: r(f.e1272), sell3: r(f.e1618) };
 }
 function isoDay(t){ return String(t || '').slice(0, 10); }
 function swingFromBars(b){
@@ -529,7 +563,7 @@ function shouldAutoRefresh(o){
 }
 
 if (typeof module !== 'undefined' && module.exports){
-  module.exports = { sgxTick, roundToTick, onTick, snapToTick, fibLevels, fibRecommend, swingFromBars, ruleStatus, buyTier,
+  module.exports = { MARKETS, listingMarket, marketOfKey, symbolOfKey, listingKey, listingChoices, tickSize, sgxTick, roundToTick, onTick, snapToTick, fibLevels, fibRecommend, swingFromBars, ruleStatus, buyTier,
     parseCSV, toISODate, toNum, to24h, round2, dayDiff, parseBankStatement, categorise, lineKey, cashPositions,
     xlsxToRows, normName, buildNameMap, matchTicker, payerOf, dividendCandidates, doubleCountedInSpecie, xlsxWrite,
     pdfDoc, pdfTextWidth, propertyYields, portfolioYields, nextDue, addMonths, instalment, sgtParts, marketState, shouldAutoRefresh,

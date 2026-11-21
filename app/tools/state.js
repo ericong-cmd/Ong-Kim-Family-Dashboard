@@ -80,7 +80,7 @@ switch (cmd){
     const src = (args.find((a, i) => args[i - 1] === '--source')) || 'IBKR';
     const pairs = args.filter((a, i) => /=/.test(a) && args[i - 1] !== '--source');
     if (!pairs.length) die('usage: set-prices TICKER=PRICE[@YYYY-MM-DD] …');
-    const rows = pairs.map(p => { const m = p.match(/^([A-Za-z0-9]+)=([\d.]+)(?:@(\d{4}-\d{2}-\d{2}))?$/); if (!m) die('bad price: ' + p); return { ticker: m[1].toUpperCase(), price: C.snapToTick(Number(m[2])), asOf: m[3] || today(), source: src }; });
+    const rows = pairs.map(p => { const m = p.match(/^([A-Za-z0-9.]+)=([\d.]+)(?:@(\d{4}-\d{2}-\d{2}))?$/); if (!m) die('bad price: ' + p); const tk = m[1].toUpperCase(), mk = C.marketOfKey(tk); const r = { ticker: tk, price: C.snapToTick(Number(m[2]), mk), asOf: m[3] || today(), source: src }; if (mk !== 'SG') r.currency = C.MARKETS[mk].currency; return r; });
     const st = updateDoc(doc => { rows.forEach(r => { doc.stores.prices[r.ticker] = r; }); doc.stores.meta.lastPriceRefresh = { key: 'lastPriceRefresh', value: Date.now() }; }, file);
     console.log('Saved ' + rows.length + ' price(s) → rev ' + st.rev + ': ' + rows.map(r => r.ticker + ' ' + r.price + '@' + r.asOf).join(', '));
     break;

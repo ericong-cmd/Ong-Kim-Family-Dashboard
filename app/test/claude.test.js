@@ -48,8 +48,15 @@ async function open(store, extra = {}){
     downloads: { save: async req => { calls.saves.push(req); } },
     mcp: { callTool: async (server, tool, input) => {
       calls.mcp.push({ server, tool, input });
+      if (tool === 'get_price_snapshot' && input.contract_id === 152791428) return { payload: { last: { price: 468.2, ts: 1794700000 } } };
       if (tool === 'get_price_snapshot') return { payload: { last: { price: 1.57, ts: 1790900000 } } };
-      if (tool === 'search_contracts') return { payload: { results: [{ exchange: 'SGX', symbol: input.query, underlying_contract_id: input.query === 'T1' ? 111 : 999 }] } };
+      if (tool === 'search_contracts' && /tencent/i.test(input.query)) return { payload: { results: [
+        { underlying_contract_id: 152791428, exchange: 'SEHK', symbol: '700', description: 'TENCENT HOLDINGS LTD', country_code: 'HK', sections: [{ security_type: 'STK' }] },
+        { underlying_contract_id: 55279376, exchange: 'PINK', symbol: 'TCEHY', description: 'TENCENT HOLDINGS LTD-UNS ADR', sections: [{ security_type: 'STK' }] },
+        { issuer: 'e1401278', description: 'Tencent Holdings Ltd', sections: [{ security_type: 'BOND' }] }] } };
+      if (tool === 'search_contracts') return { payload: { results: [{ exchange: 'SGX', symbol: input.query, underlying_contract_id: input.query === 'T1' ? 111 : 999, sections: [{ security_type: 'STK' }] }] } };
+      if (tool === 'get_price_history' && input.contract_id === 152791428 && !input.include_corporate_actions)
+        return { payload: { time: ['2026-06-01T00:00:00Z', '2026-08-01T00:00:00Z', '2026-11-01T00:00:00Z'], open: [430, 500, 470], high: [440, 520, 480], low: [400, 490, 455], close: [430, 515, 468] } };
       if (tool === 'get_price_history' && input.include_corporate_actions)
         return { payload: { time: [], close: [], corp_actions: input.contract_id === 111 ? [{ type: 'CashDividends', date: ymd(-10), announce_date: ymd(-20), payment_date: ymd(5), value: '0.05', currency: 'SGD' }, { type: 'CashDividends', date: ymd(20), payment_date: ymd(35), value: '0.04', currency: 'SGD' }] : [] } };
       return { payload: { time: ['2026-10-01T00:00:00'], close: [1.5] } };
@@ -119,6 +126,23 @@ const answer = async (d, typed) => {   // wait for the in-page dialog, then conf
   ok(a.ev('G.txns.filter(t => t.type === "DIVIDEND" && t.ticker === "T1").length') === 1, 'checking again books nothing twice');
   await sleep(900);
   ok(a.errors.length === 0, 'no errors in the first session' + (a.errors.length ? ': ' + a.errors.join(' | ') : ''));
+
+  // rules on any market: search IBKR, pick Tencent on HKEX, propose levels on HKEX ticks, save
+  a.d.getElementById('newRuleBtn').click(); await sleep(20);
+  a.d.getElementById('r_search').value = 'Tencent'; a.d.getElementById('ruleSearchBtn').click(); await sleep(80);
+  const hits = [...a.d.querySelectorAll('#ruleSearchResults .rule-hit')];
+  ok(hits.length === 1 && /700/.test(hits[0].textContent) && /HKEX/.test(hits[0].textContent), 'stock search lists the HKEX listing only (no OTC ADR, no bond)');
+  hits[0].click(); await sleep(20);
+  ok(a.d.getElementById('r_market').value === 'HK' && a.d.getElementById('r_ticker').value === '700' && /TENCENT HOLDINGS LTD · HKEX · prices in HKD/.test(a.d.getElementById('r_ticker_hint').textContent), 'picking it fills market HK, ticker 700 and shows the name and currency');
+  a.d.getElementById('ruleLoadBtn').click(); await sleep(120);
+  ok(a.d.getElementById('r_high').value === '520' && a.d.getElementById('r_low').value === '400' && a.d.getElementById('r_buy2').value === '460', 'price history on SEHK → swing 520 / 400, Buy 2 at 460');
+  const lv = ['buy1', 'buy2', 'buy3', 'cut', 'sell1', 'sell2', 'sell3'].map(k => Number(a.d.getElementById('r_' + k).value));
+  ok(lv.every(v => a.ev('onTick')(v, 'HK')), 'all proposed levels sit on HKEX ticks');
+  a.d.getElementById('drawerSave').click(); await sleep(50);
+  const rule = JSON.parse(a.ev('JSON.stringify(Object.values(DOC.stores.rules).find(r => r.ticker === "700.HK") || null)'));
+  ok(rule && rule.name === 'TENCENT HOLDINGS LTD' && rule.currency === 'HKD' && !('market' in rule), 'rule saved as 700.HK with name and currency (not tied to the portfolio)');
+  ok(a.ev('G.prices["700.HK"] && G.prices["700.HK"].price') === 468.2 && a.ev('G.prices["700.HK"].currency') === 'HKD', 'last price stored in HKD for the rule');
+  ok(/700/.test(a.d.getElementById('rulesBody').textContent) && /HKEX · HKD/.test(a.d.getElementById('rulesBody').textContent), 'rules table shows ticker, market and currency');
 
   // ---------- 4. reopen from the database ----------
   const b = await open(store);

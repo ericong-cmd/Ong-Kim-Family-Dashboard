@@ -280,3 +280,9 @@ button.danger-solid:hover{background:#8e1d17}
 .view-only #priceList input,.view-only #page-ledger .boundaries input{pointer-events:none;border-color:transparent;background:transparent}
 .unlock-overlay{background:var(--paper)}
 .unlock-title{margin:0;font-family:var(--serif);font-size:22px;text-transform:none;letter-spacing:0;color:var(--ink)}
+
+/* rules: stock search */
+.rule-search{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px}
+.rule-results{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;max-height:260px;overflow:auto}
+.rule-hit{text-align:left;display:block;width:100%;padding:7px 10px}
+.rule-hit .hint{margin-left:6px}

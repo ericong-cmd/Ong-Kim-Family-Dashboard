@@ -28,33 +28,44 @@ async function ibkr(tool, args){
   const txt = r.content && r.content[0] && r.content[0].text;
   return txt ? JSON.parse(txt) : {};
 }
+// Keys: bare SGX tickers ('D05') or 'SYMBOL.MY' / '.HK' / '.US' for rules on other markets (calc.js).
 async function contractFor(tk){
   tk = String(tk || '').toUpperCase(); if (!tk) return null;
   if (IBKR_CONTRACTS[tk]) return IBKR_CONTRACTS[tk];
-  const d = await ibkr('search_contracts', { query: tk });
-  const hit = (d.results || []).find(x => x.exchange === 'SGX' && String(x.symbol).toUpperCase() === tk);
+  const mkt = marketOfKey(tk), sym = symbolOfKey(tk);
+  const d = await ibkr('search_contracts', { query: sym });
+  const hit = listingChoices(d.results, mkt).find(x => x.symbol === sym);
   if (!hit) return null;
-  IBKR_CONTRACTS[tk] = hit.underlying_contract_id;
-  await sPut('maps', { key: 'cid:' + tk, value: hit.underlying_contract_id });
-  return hit.underlying_contract_id;
+  IBKR_CONTRACTS[tk] = hit.conid;
+  await sPut('maps', { key: 'cid:' + tk, value: hit.conid });
+  return hit.conid;
 }
+// Stock search across SGX, Bursa, HKEX and US listings (market: 'SG' | 'MY' | 'HK' | 'US' | '' for all).
+async function searchListings(query, market){
+  const d = await ibkr('search_contracts', { query: String(query || '').trim() });
+  return listingChoices(d.results, market || null);
+}
+const _TZ = { SG: 8, MY: 8, HK: 8, US: -5 };
 function epochToSgtDate(sec){ return new Date(sec * 1000 + 8 * 3600e3).toISOString().slice(0, 10); }
-// Real-time last during SGX hours; otherwise the latest daily close, dated with that bar's date.
+function epochToMarketDate(sec, mkt){ return new Date(sec * 1000 + (_TZ[mkt] == null ? 8 : _TZ[mkt]) * 3600e3).toISOString().slice(0, 10); }
+// Real-time last during market hours; otherwise the latest daily close, dated with that bar's date.
 async function quoteTicker(tk){
-  const cid = await contractFor(tk); if (!cid) throw new Error('No SGX listing found for ' + tk);
+  const mkt = marketOfKey(tk), ex = MARKETS[mkt].exchange;
+  const cid = await contractFor(tk); if (!cid) throw new Error('No ' + MARKETS[mkt].short + ' listing found for ' + tk);
   let snap = {};
-  try { snap = await ibkr('get_price_snapshot', { contract_id: cid, exchange: 'SGX', market_data_names: ['last', 'bid_ask'] }); } catch (e) { snap = {}; }
+  try { snap = await ibkr('get_price_snapshot', { contract_id: cid, exchange: ex, market_data_names: ['last', 'bid_ask'] }); } catch (e) { snap = {}; }
   const last = snap && snap.last;
   if (last && last.price != null && isFinite(last.price) && !last.halted){
-    return { ticker: tk, price: snapToTick(Number(last.price)), asOf: last.ts ? epochToSgtDate(last.ts) : sgtParts(Date.now()).date, live: true };
+    return { ticker: tk, price: snapToTick(Number(last.price), mkt), asOf: last.ts ? epochToMarketDate(last.ts, mkt) : sgtParts(Date.now()).date, live: true, currency: MARKETS[mkt].currency };
   }
-  const h = await ibkr('get_price_history', { contract_id: cid, security_type: 'STK', exchange: 'SGX', step: 'ONE_DAY', period: 'ONE_WEEK', outside_rth: false });
+  const h = await ibkr('get_price_history', { contract_id: cid, security_type: 'STK', exchange: ex, step: 'ONE_DAY', period: 'ONE_WEEK', outside_rth: false });
   const n = (h.close || []).length; if (!n) throw new Error('No recent close for ' + tk);
-  return { ticker: tk, price: snapToTick(Number(h.close[n - 1])), asOf: String(h.time[n - 1]).slice(0, 10), live: false };
+  return { ticker: tk, price: snapToTick(Number(h.close[n - 1]), mkt), asOf: String(h.time[n - 1]).slice(0, 10), live: false, currency: MARKETS[mkt].currency };
 }
 async function priceHistory(tk, period){
-  const cid = await contractFor(tk); if (!cid) throw new Error('No SGX listing found for ' + tk);
-  const h = await ibkr('get_price_history', { contract_id: cid, security_type: 'STK', exchange: 'SGX', step: 'ONE_DAY', period: period || 'SIX_MONTHS', outside_rth: false });
+  const mkt = marketOfKey(tk);
+  const cid = await contractFor(tk); if (!cid) throw new Error('No ' + MARKETS[mkt].short + ' listing found for ' + tk);
+  const h = await ibkr('get_price_history', { contract_id: cid, security_type: 'STK', exchange: MARKETS[mkt].exchange, step: 'ONE_DAY', period: period || 'SIX_MONTHS', outside_rth: false });
   return { time: h.time || [], open: h.open || [], high: h.high || [], low: h.low || [], close: h.close || [] };
 }
 let _refreshing = false;
@@ -66,7 +77,7 @@ async function refreshPrices(tickers, opts){
   const worker = async () => {
     while (queue.length){
       const tk = queue.shift();
-      try { const q = await quoteTicker(tk); await sPut('prices', { ticker: tk, price: q.price, asOf: q.asOf, source: 'IBKR' }); ok.push(q); }
+      try { const q = await quoteTicker(tk); const rec = { ticker: tk, price: q.price, asOf: q.asOf, source: 'IBKR' }; if (q.currency !== 'SGD') rec.currency = q.currency; await sPut('prices', rec); ok.push(q); }
       catch (e) { fail.push({ ticker: tk, error: e.message }); }
       done++; if (onProgress) onProgress(done, tickers.length);
     }
