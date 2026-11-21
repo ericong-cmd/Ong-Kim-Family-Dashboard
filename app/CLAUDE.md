@@ -147,8 +147,9 @@ build refuses duplicate top-level names. Don't put a literal `</script>` in sour
   (calc.js `pdfDoc`, ledger.js `holdingsPdfBytes`) — works in every mode. A4 landscape, font scaled to fit
   one page; long lists continue with the header repeated. *Print holdings (1 page)* keeps the print
   layout where a print dialog exists (hidden in the claude.ai artifact).
-- **The website (Vercel) never embeds data either:** `npm run build:web` → `app/dist/web/index.html`;
-  `vercel.json` builds it on every push. Each browser keeps its own records (localStorage), loaded once
+- **The website build never embeds data either:** `npm run build:web` → `app/dist/web/index.html`.
+  Its Vercel project (ong-kim-family-dashboard) was deleted on 21 Nov 2026 at Eric's request — only the
+  shared snapshot is online; `vercel.json` stays for a future deploy. Each browser keeps its own records (localStorage), loaded once
   from a Backup JSON. No IBKR there — prices and dividends refresh in the artifact or on the Mac.
 - **The claude.ai artifact never embeds data.** To update it: `npm run build:claude`, `npm test`, then
   publish `app/dist/family-office.claude.html` to the same URL with the Artifact tool.
